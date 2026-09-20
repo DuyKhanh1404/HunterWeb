@@ -1467,6 +1467,10 @@
             normalizeGameState();
             checkCycleResets();
             saveData();
+            // Đăng nhập cũng phải được ghi lên Firebase để các thiết bị khác tự chuyển sang trạng thái ĐÃ ĐĂNG NHẬP.
+            if (typeof window.firebaseAccountLogin === 'function') {
+                await window.firebaseAccountLogin();
+            }
             closeLoginModal();
             updateAccountUI();
             renderAll();setCloudConfigInputs();updateSyncUI(navigator.onLine?(cloudConfig.endpoint?'ready':'local'):'offline');
@@ -1479,6 +1483,10 @@
             if (!confirm("Đăng xuất sẽ quay lại dữ liệu khách trên trình duyệt này. Tiếp tục?")) return;
 
             saveDataForKey(ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME);
+            // Đẩy trạng thái LOGOUT lên Firebase trước khi đổi UI/local state.
+            if (typeof window.firebaseAccountLogout === 'function') {
+                await window.firebaseAccountLogout();
+            }
             isLoggedIn = false;
             loggedInUsername = null;
             localStorage.removeItem('hunter_language_system_logged_in');
@@ -3306,8 +3314,21 @@ function activatePotion(itemId) {
 }
     </script>
    <script type="module">
+  /* ================================================================
+     FIREBASE REALTIME ACCOUNT SYNC
+     - Một tài khoản DuyKhanh dùng chung cho mọi thiết bị/trình duyệt.
+     - Đồng bộ gameState + trạng thái đăng nhập/đăng xuất theo thời gian thực.
+     - Firestore transaction tạo revision tuần tự để tránh máy này ghi đè
+       snapshot cũ của máy kia.
+     ================================================================ */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import {
+    getFirestore,
+    doc,
+    onSnapshot,
+    runTransaction,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",
@@ -3322,35 +3343,243 @@ function activatePotion(itemId) {
   const db = getFirestore(app);
   const userDocRef = doc(db, "users", "DuyKhanh");
 
-  let isRemoteChange = false;
+  const DEVICE_ID_KEY = "hunter_language_system_device_id_v1";
+  const deviceId = (() => {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = (crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2)));
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  })();
 
-  // 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE REALTIME VỀ MÁY
-  onSnapshot(userDocRef, (docSnap) => {
-    if (docSnap.exists()) {
-      const remoteData = docSnap.data();
-      if (typeof gameState !== 'undefined') {
-        isRemoteChange = true;
-        Object.assign(gameState, remoteData);
-        
-        if (typeof renderAll === 'function') renderAll();
-        if (typeof render === 'function') render();
-        
-        setTimeout(() => { isRemoteChange = false; }, 500);
+  let applyingRemote = false;
+  let firebaseReady = false;
+  let remoteRevision = 0;
+  let localRevisionForFirebase = 0;
+  let pendingStateTimer = null;
+  let lastRemoteLoginState = null;
+
+  function cloneState(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function writeLocalAccountSnapshot(state, revision = 0) {
+    try {
+      const copy = cloneState(state);
+      localStorage.setItem(ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME, JSON.stringify(copy));
+      if (typeof idbDb !== 'undefined' && idbDb) {
+        idbPut(IDB_STATE_STORE, {
+          key: ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME,
+          state: copy,
+          revision: Number(revision || 0),
+          updatedAt: Date.now()
+        }).catch(() => {});
       }
+    } catch (e) {
+      console.warn("Không thể lưu snapshot account local:", e);
     }
-  });
+  }
 
-  // 2. TỰ ĐỘNG LẮNG NGHE HÀM saveData GỐC CỦA WEB ĐỂ GỬI LÊN FIREBASE
-  const originalSaveData = window.saveData;
-  window.saveData = function() {
-    if (typeof originalSaveData === 'function') {
-      originalSaveData();
+  async function writeFirebaseAccount(patch, includeState = false) {
+    if (!firebaseReady) return;
+    try {
+      const result = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(userDocRef);
+        const old = snap.exists() ? snap.data() : {};
+        const nextRevision = Number(old.revision || 0) + 1;
+        const data = {
+          username: ACCOUNT_USERNAME,
+          revision: nextRevision,
+          updatedAt: serverTimestamp(),
+          updatedByDevice: deviceId,
+          ...patch
+        };
+        if (includeState && typeof gameState !== 'undefined') data.state = cloneState(gameState);
+        tx.set(userDocRef, data, { merge: true });
+        return nextRevision;
+      });
+      localRevisionForFirebase = Number(result || localRevisionForFirebase);
+      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
+      updateSyncUI('synced');
+    } catch (err) {
+      console.error("Firebase sync error:", err);
+      updateSyncUI('error');
     }
-    if (!isRemoteChange && typeof gameState !== 'undefined') {
-      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
+  }
+
+  function scheduleFirebaseStateSync() {
+    if (!firebaseReady || !isLoggedIn || applyingRemote) return;
+    clearTimeout(pendingStateTimer);
+    pendingStateTimer = setTimeout(() => {
+      writeFirebaseAccount({
+        loggedIn: true,
+        sessionChangedAt: serverTimestamp()
+      }, true);
+    }, 350);
+  }
+
+  // API nội bộ để performLogin/logoutUser gọi được dù module chạy sau script chính.
+  window.firebaseAccountLogin = async function () {
+    if (!firebaseReady) return;
+    try {
+      const result = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(userDocRef);
+        const old = snap.exists() ? snap.data() : {};
+        const hasRemoteState = old.state && typeof old.state === 'object';
+        const nextRevision = Number(old.revision || 0) + 1;
+
+        // Nếu cloud đã có dữ liệu DuyKhanh, luôn lấy snapshot cloud làm nguồn sự thật.
+        // Điều này ngăn một máy mới đăng nhập bằng dữ liệu local cũ ghi đè dữ liệu mới nhất.
+        if (hasRemoteState) {
+          applyingRemote = true;
+          gameState = cloneState(old.state);
+          normalizeGameState();
+          checkCycleResets();
+          writeLocalAccountSnapshot(gameState, nextRevision);
+          applyingRemote = false;
+        }
+
+        const data = {
+          username: ACCOUNT_USERNAME,
+          revision: nextRevision,
+          updatedAt: serverTimestamp(),
+          updatedByDevice: deviceId,
+          loggedIn: true,
+          sessionChangedAt: serverTimestamp(),
+          sessionDeviceId: deviceId,
+          state: cloneState(gameState)
+        };
+        tx.set(userDocRef, data, { merge: true });
+        return nextRevision;
+      });
+
+      localRevisionForFirebase = Number(result || localRevisionForFirebase);
+      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
+      renderAll();
+      updateAccountUI();
+      updateSyncUI('synced');
+    } catch (err) {
+      console.error("Firebase login sync:", err);
+      updateSyncUI('error');
+      showToast('⚠ Không thể đồng bộ phiên đăng nhập với Firebase: ' + err.message, 'error');
     }
   };
-</script>
+
+  window.firebaseAccountLogout = async function () {
+    if (!firebaseReady) return;
+    clearTimeout(pendingStateTimer);
+    await writeFirebaseAccount({
+      loggedIn: false,
+      sessionChangedAt: serverTimestamp(),
+      sessionDeviceId: deviceId
+    }, false);
+  };
+
+  // Lắng nghe REALTIME: state và trạng thái login/logout đều cập nhật ngay trên máy khác.
+  onSnapshot(userDocRef, (snap) => {
+    if (!snap.exists()) {
+      firebaseReady = true;
+      return;
+    }
+
+    firebaseReady = true;
+    const remote = snap.data() || {};
+    const rr = Number(remote.revision || 0);
+    const remoteLoggedIn = remote.loggedIn === true;
+    const remoteState = remote.state;
+    const changedByThisDevice = remote.updatedByDevice === deviceId;
+
+    remoteRevision = Math.max(remoteRevision, rr);
+
+    // Snapshot do chính máy này vừa ghi: không nạp ngược lại để tránh vòng lặp.
+    if (changedByThisDevice) {
+      lastRemoteLoginState = remoteLoggedIn;
+      if (remoteLoggedIn && remoteState) writeLocalAccountSnapshot(remoteState, rr);
+      return;
+    }
+
+    // 1) Đồng bộ trạng thái đăng nhập/đăng xuất.
+    if (lastRemoteLoginState !== remoteLoggedIn) {
+      lastRemoteLoginState = remoteLoggedIn;
+
+      if (remoteLoggedIn) {
+        applyingRemote = true;
+        isLoggedIn = true;
+        loggedInUsername = ACCOUNT_USERNAME;
+        localStorage.setItem('hunter_language_system_logged_in', ACCOUNT_USERNAME);
+
+        if (remoteState) {
+          gameState = cloneState(remoteState);
+          normalizeGameState();
+          checkCycleResets();
+          writeLocalAccountSnapshot(gameState, rr);
+          renderAll();
+        }
+
+        updateAccountUI();
+        updateSyncUI('synced');
+        applyingRemote = false;
+        showToast(`🔄 ${ACCOUNT_USERNAME} đã đăng nhập trên thiết bị khác — phiên này đã tự đồng bộ.`, 'success');
+      } else {
+        // Đăng xuất trên một thiết bị => trạng thái phiên của tài khoản cũng đăng xuất trên các thiết bị khác.
+        applyingRemote = true;
+        isLoggedIn = false;
+        loggedInUsername = null;
+        localStorage.removeItem('hunter_language_system_logged_in');
+
+        const guestSaved = localStorage.getItem(GUEST_STORAGE_KEY);
+        if (guestSaved) {
+          try { gameState = JSON.parse(guestSaved); }
+          catch (e) { gameState = cloneDefaultGameState(); }
+        } else {
+          gameState = cloneDefaultGameState();
+        }
+        normalizeGameState();
+        checkCycleResets();
+        updateAccountUI();
+        renderAll();
+        updateSyncUI('synced');
+        applyingRemote = false;
+        showToast(`🔒 ${ACCOUNT_USERNAME} đã đăng xuất từ thiết bị khác.`, 'success');
+      }
+      return;
+    }
+
+    // 2) Đồng bộ gameState realtime.
+    if (remoteLoggedIn && remoteState && rr > localRevisionForFirebase) {
+      applyingRemote = true;
+      gameState = cloneState(remoteState);
+      normalizeGameState();
+      checkCycleResets();
+      localRevisionForFirebase = rr;
+      writeLocalAccountSnapshot(gameState, rr);
+      renderAll();
+      updateSyncUI('synced');
+      applyingRemote = false;
+    }
+  }, (err) => {
+    console.error("Firebase realtime listener:", err);
+    firebaseReady = true;
+    updateSyncUI('error');
+  });
+
+  // Hook vào saveData hiện có: local-first vẫn chạy như cũ, sau đó snapshot được đẩy lên Firebase.
+  const originalSaveData = window.saveData;
+  window.saveData = function(reason = 'change') {
+    if (typeof originalSaveData === 'function') originalSaveData(reason);
+    scheduleFirebaseStateSync();
+  };
+
+  firebaseReady = true;
+  updateSyncUI('syncing');
+
+  // Nếu trang được mở lại và local đang nhớ DuyKhanh, listener sẽ lấy state mới nhất từ cloud.
+  if (typeof isLoggedIn !== 'undefined' && isLoggedIn) {
+    setTimeout(() => {
+      if (navigator.onLine) scheduleFirebaseStateSync();
+    }, 500);
+  }
 </script>
 </body>
 </html>
