@@ -222,31 +222,46 @@
     </div>
 
 
-    <!-- OPTIONAL ACCOUNT LOGIN: trang vẫn hoạt động bình thường khi chưa đăng nhập -->
+    <!-- ACCOUNT AUTH MODAL -->
     <div id="login-modal" class="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-5">
         <div class="w-full max-w-md rounded-3xl bg-hunter-card border border-cyan-500/40 p-7 shadow-[0_0_50px_rgba(34,211,238,.18)]">
             <div class="text-center mb-6">
                 <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-purple-700 flex items-center justify-center shadow-lg">
-                    <i data-lucide="log-in" class="w-7 h-7 text-white"></i>
+                    <i data-lucide="shield-check" class="w-7 h-7 text-white"></i>
                 </div>
-                <h2 class="mt-4 text-xl font-black font-sans text-cyan-300">ĐĂNG NHẬP HỆ THỐNG</h2>
-                <p class="text-xs text-slate-400 mt-2">Đăng nhập để thay thế dữ liệu khách bằng dữ liệu tài khoản DuyKhanh.</p>
+                <h2 id="auth-modal-title" class="mt-4 text-xl font-black font-sans text-cyan-300">TÀI KHOẢN</h2>
+                <p id="auth-modal-subtitle" class="text-xs text-slate-400 mt-2">Đăng nhập để đồng bộ dữ liệu riêng của tài khoản trên mọi thiết bị.</p>
             </div>
-            <div class="space-y-3">
-                <input id="login-username" type="text" autocomplete="username" placeholder="Tên tài khoản"
-                    class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
-                <input id="login-password" type="password" autocomplete="current-password" placeholder="Mật khẩu"
-                    class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500"
-                    onkeydown="if(event.key==='Enter') performLogin()">
+            <div id="auth-login-panel" class="space-y-3">
+                <input id="login-username" type="text" autocomplete="username" placeholder="Tên tài khoản" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
+                <input id="login-password" type="password" autocomplete="current-password" placeholder="Mật khẩu" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500" onkeydown="if(event.key==='Enter') performLogin()">
                 <p id="login-error" class="hidden text-xs text-rose-400 font-bold"></p>
-                <button onclick="performLogin()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 text-white font-black font-sans text-xs shadow-lg">
-                    ĐĂNG NHẬP
-                </button>
-                <button onclick="closeLoginModal()" class="w-full py-2.5 rounded-xl bg-slate-900 border border-hunter-border text-slate-400 text-xs font-bold">
-                    HỦY
-                </button>
+                <button onclick="performLogin()" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 text-white font-black font-sans text-xs shadow-lg">ĐĂNG NHẬP</button>
+                <button onclick="showRegisterPanel()" class="w-full py-2.5 rounded-xl bg-slate-900 border border-cyan-500/20 text-cyan-300 text-xs font-bold">TẠO TÀI KHOẢN MỚI</button>
             </div>
-            <p class="mt-5 text-[10px] text-slate-600 text-center">Chế độ tài khoản trong file HTML này là đăng nhập phía trình duyệt; muốn đồng bộ thật giữa các máy cần thêm máy chủ/database.</p>
+            <div id="auth-register-panel" class="hidden space-y-3">
+                <input id="register-username" type="text" autocomplete="username" placeholder="Tên tài khoản (3–20 ký tự)" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
+                <input id="register-password" type="password" autocomplete="new-password" placeholder="Mật khẩu (ít nhất 6 ký tự)" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
+                <input id="register-password2" type="password" autocomplete="new-password" placeholder="Nhập lại mật khẩu" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500" onkeydown="if(event.key==='Enter') performRegister()">
+                <p id="register-error" class="hidden text-xs text-rose-400 font-bold"></p>
+                <button onclick="performRegister()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 text-white font-black font-sans text-xs shadow-lg">TẠO TÀI KHOẢN</button>
+                <button onclick="showLoginPanel()" class="w-full py-2.5 rounded-xl bg-slate-900 border border-hunter-border text-slate-400 text-xs font-bold">QUAY LẠI ĐĂNG NHẬP</button>
+            </div>
+            <div id="auth-account-panel" class="hidden space-y-3">
+                <div class="rounded-xl bg-slate-950 border border-hunter-border px-4 py-3 text-sm text-cyan-100">Đang đăng nhập: <b id="account-panel-username" class="text-cyan-300"></b></div>
+                <button onclick="showChangePasswordPanel()" class="w-full py-3 rounded-xl bg-slate-900 border border-cyan-500/30 text-cyan-300 font-bold text-xs">ĐỔI MẬT KHẨU</button>
+                <button onclick="logoutUser(); closeLoginModal()" class="w-full py-3 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 font-bold text-xs">ĐĂNG XUẤT</button>
+            </div>
+            <div id="auth-password-panel" class="hidden space-y-3">
+                <input id="change-current-password" type="password" autocomplete="current-password" placeholder="Mật khẩu hiện tại" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
+                <input id="change-password" type="password" autocomplete="new-password" placeholder="Mật khẩu mới (ít nhất 6 ký tự)" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500">
+                <input id="change-password2" type="password" autocomplete="new-password" placeholder="Nhập lại mật khẩu mới" class="w-full bg-slate-950 border border-hunter-border rounded-xl px-4 py-3 text-sm text-cyan-100 focus:outline-none focus:border-cyan-500" onkeydown="if(event.key==='Enter') performChangePassword()">
+                <p id="password-error" class="hidden text-xs text-rose-400 font-bold"></p>
+                <button onclick="performChangePassword()" class="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white font-black text-xs">CẬP NHẬT MẬT KHẨU</button>
+                <button onclick="showAccountPanel()" class="w-full py-2.5 rounded-xl bg-slate-900 border border-hunter-border text-slate-400 text-xs font-bold">QUAY LẠI</button>
+            </div>
+            <button id="auth-cancel-btn" onclick="closeLoginModal()" class="w-full mt-3 py-2.5 rounded-xl bg-slate-900 border border-hunter-border text-slate-400 text-xs font-bold">ĐÓNG</button>
+            <p class="mt-5 text-[10px] text-slate-600 text-center">Mỗi thiết bị cần xác thực tài khoản riêng. Firebase Authentication bảo vệ dữ liệu; Firestore chỉ cho tài khoản đã xác thực truy cập dữ liệu của chính mình.</p>
         </div>
     </div>
 
@@ -903,8 +918,9 @@
         const STORAGE_KEY = "hunter_language_system_save_v24";
         const GUEST_STORAGE_KEY = "hunter_language_system_guest_v1";
         const ACCOUNT_STORAGE_PREFIX = "hunter_language_system_account_";
-        const ACCOUNT_USERNAME = "DuyKhanh";
-        const ACCOUNT_PASSWORD = "Khanh1404!";
+        const LEGACY_ACCOUNT_USERNAME = "DuyKhanh";
+        const ACCOUNT_USERNAME = LEGACY_ACCOUNT_USERNAME; // backward compatibility for old local data
+        let loggedInUsername = null;
         const IDB_DB_NAME = "HunterLanguageSystemLocalFirst";
         const IDB_DB_VERSION = 1;
         const IDB_STATE_STORE = "states";
@@ -918,7 +934,6 @@
         let syncTimer = null;
         let cloudConfig = loadCloudConfig();
         let isLoggedIn = false;
-        let loggedInUsername = null;
         const BASE_XP_PER_MINUTE = 15;
         const BASE_COINS_PER_MINUTE = 5;
         const RANKS_CONFIG = [
@@ -1351,7 +1366,11 @@
         }
 
         async function syncNow(manual=false){
-            if(!isLoggedIn){if(manual)showToast('☁ Hãy đăng nhập DuyKhanh để đồng bộ Cloud.','error');return;}
+            // Firebase Authentication + Firestore là sync chính cho tài khoản mới.
+            // REST/Cloud Sync cũ chỉ giữ lại cho dữ liệu guest/legacy, không được phép
+            // ghi đè dữ liệu tài khoản Firebase.
+            if(isLoggedIn && loggedInUsername){ updateSyncUI(navigator.onLine?'synced':'offline'); return; }
+            if(!isLoggedIn){if(manual)showToast('☁ Hãy đăng nhập tài khoản để đồng bộ Cloud.','error');return;}
             if(!navigator.onLine){updateSyncUI('offline');if(manual)showToast('📡 Đang Offline. Dữ liệu vẫn an toàn trong IndexedDB.','success');return;}
             if(!cloudConfig.endpoint){updateSyncUI('ready');if(manual)showToast('☁ Chưa cấu hình Cloud Endpoint. Local-First vẫn hoạt động.','error');return;}
             if(syncInProgress)return; syncInProgress=true; updateSyncUI('syncing');
@@ -1397,114 +1416,62 @@
             return cloned;
         }
 
-        function getActiveStorageKey() {
-            return isLoggedIn
-                ? ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME
-                : GUEST_STORAGE_KEY;
+        function currentAccountUsername(){ return loggedInUsername || null; }
+        function accountStorageKey(username){ return ACCOUNT_STORAGE_PREFIX + String(username || '').toLowerCase(); }
+        function getActiveStorageKey() { return isLoggedIn && loggedInUsername ? accountStorageKey(loggedInUsername) : GUEST_STORAGE_KEY; }
+        function saveDataForKey(key) { localStorage.setItem(key, JSON.stringify(gameState)); }
+
+        function showAuthPanel(name){
+            ['auth-login-panel','auth-register-panel','auth-account-panel','auth-password-panel'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+            document.getElementById(name)?.classList.remove('hidden');
+            document.getElementById('login-error')?.classList.add('hidden');
+            document.getElementById('register-error')?.classList.add('hidden');
+            document.getElementById('password-error')?.classList.add('hidden');
         }
-
-        function saveDataForKey(key) {
-            localStorage.setItem(key, JSON.stringify(gameState));
+        function showLoginPanel(){ document.getElementById('auth-modal-title').textContent='ĐĂNG NHẬP HỆ THỐNG'; document.getElementById('auth-modal-subtitle').textContent='Đăng nhập để đồng bộ dữ liệu riêng của tài khoản trên mọi thiết bị.'; showAuthPanel('auth-login-panel'); setTimeout(()=>document.getElementById('login-username')?.focus(),50); }
+        function showRegisterPanel(){ document.getElementById('auth-modal-title').textContent='TẠO TÀI KHOẢN'; document.getElementById('auth-modal-subtitle').textContent='Tên tài khoản phải là duy nhất. Dữ liệu sẽ được lưu riêng cho tài khoản đó.'; showAuthPanel('auth-register-panel'); setTimeout(()=>document.getElementById('register-username')?.focus(),50); }
+        function showAccountPanel(){ document.getElementById('auth-modal-title').textContent='TÀI KHOẢN'; document.getElementById('auth-modal-subtitle').textContent='Quản lý phiên đăng nhập và mật khẩu.'; document.getElementById('account-panel-username').textContent=loggedInUsername||''; showAuthPanel('auth-account-panel'); }
+        function showChangePasswordPanel(){ document.getElementById('auth-modal-title').textContent='ĐỔI MẬT KHẨU'; document.getElementById('auth-modal-subtitle').textContent='Vì lý do bảo mật, Firebase có thể yêu cầu đăng nhập lại trước khi đổi mật khẩu.'; showAuthPanel('auth-password-panel'); }
+        function openLoginModal(){ const modal=document.getElementById('login-modal'); if(!modal)return; modal.classList.remove('hidden'); modal.classList.add('flex'); isLoggedIn?showAccountPanel():showLoginPanel(); }
+        function closeLoginModal(){ const modal=document.getElementById('login-modal'); if(!modal)return; modal.classList.remove('flex'); modal.classList.add('hidden'); }
+        function updateAccountUI(){
+            const btn=document.getElementById('login-open-btn'); if(!btn)return;
+            if(isLoggedIn){ btn.innerHTML=`👤 ${loggedInUsername} • TÀI KHOẢN`; btn.className='px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 transition text-emerald-300 text-[10px] font-bold font-sans shadow'; btn.onclick=openLoginModal; btn.title='Quản lý tài khoản'; }
+            else { btn.innerHTML='ĐĂNG NHẬP'; btn.className='px-3 py-2 rounded-xl bg-slate-950/90 hover:bg-slate-800 border border-cyan-500/30 transition text-cyan-300 text-[10px] font-bold font-sans shadow'; btn.onclick=openLoginModal; btn.title='Đăng nhập hoặc tạo tài khoản'; }
         }
+        function authErrorMessage(err){ const code=err?.code||''; const map={
+            'auth/invalid-credential':'Sai tên tài khoản hoặc mật khẩu.','auth/invalid-login-credentials':'Sai tên tài khoản hoặc mật khẩu.','auth/user-not-found':'Không tìm thấy tài khoản.','auth/wrong-password':'Sai mật khẩu.','auth/email-already-in-use':'Tên tài khoản này đã được sử dụng.','auth/weak-password':'Mật khẩu quá yếu. Hãy dùng ít nhất 6 ký tự.','auth/too-many-requests':'Có quá nhiều lần thử. Hãy chờ một lúc rồi thử lại.','auth/requires-recent-login':'Vui lòng đăng nhập lại rồi đổi mật khẩu.','auth/network-request-failed':'Không kết nối được Firebase. Kiểm tra mạng.','auth/operation-not-allowed':'Firebase Authentication chưa bật Email/Password trong Console.'}; return map[code]||err?.message||'Đã xảy ra lỗi xác thực.'; }
 
-        function openLoginModal() {
-            const modal = document.getElementById('login-modal');
-            if (!modal) return;
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            document.getElementById('login-error').classList.add('hidden');
-            document.getElementById('login-username').focus();
+        async function performLogin(){
+            const username=document.getElementById('login-username').value.trim(); const password=document.getElementById('login-password').value; const error=document.getElementById('login-error');
+            if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){ error.textContent='Tên tài khoản chỉ gồm chữ, số, dấu gạch dưới và dài 3–20 ký tự.'; error.classList.remove('hidden'); return; }
+            if(!password){ error.textContent='Vui lòng nhập mật khẩu.'; error.classList.remove('hidden'); return; }
+            try{
+                saveDataForKey(GUEST_STORAGE_KEY);
+                await window.firebaseSignIn(username,password);
+                closeLoginModal();
+                showToast(`👤 Đã đăng nhập ${username}. Dữ liệu tài khoản đã được đồng bộ.`, 'success');
+            }catch(err){ error.textContent=authErrorMessage(err); error.classList.remove('hidden'); }
         }
-
-        function closeLoginModal() {
-            const modal = document.getElementById('login-modal');
-            if (!modal) return;
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
+        async function performRegister(){
+            const username=document.getElementById('register-username').value.trim(); const p1=document.getElementById('register-password').value; const p2=document.getElementById('register-password2').value; const error=document.getElementById('register-error');
+            if(!/^[A-Za-z0-9_]{3,20}$/.test(username)){ error.textContent='Tên tài khoản chỉ gồm A-Z, a-z, 0-9, _ và dài 3–20 ký tự.'; error.classList.remove('hidden'); return; }
+            if(p1.length<6){ error.textContent='Mật khẩu phải có ít nhất 6 ký tự.'; error.classList.remove('hidden'); return; }
+            if(p1!==p2){ error.textContent='Hai mật khẩu không giống nhau.'; error.classList.remove('hidden'); return; }
+            try{ saveDataForKey(GUEST_STORAGE_KEY); await window.firebaseRegister(username,p1); closeLoginModal(); showToast(`✅ Tạo tài khoản ${username} thành công.`, 'success'); }catch(err){ error.textContent=authErrorMessage(err); error.classList.remove('hidden'); }
         }
-
-        function updateAccountUI() {
-            const btn = document.getElementById('login-open-btn');
-            if (!btn) return;
-            if (isLoggedIn) {
-                btn.innerHTML = `👤 ${ACCOUNT_USERNAME} • THOÁT`;
-                btn.className = "px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 transition text-emerald-300 text-[10px] font-bold font-sans shadow";
-                btn.onclick = logoutUser;
-                btn.title = "Đăng xuất tài khoản";
-            } else {
-                btn.innerHTML = "ĐĂNG NHẬP";
-                btn.className = "px-3 py-2 rounded-xl bg-slate-950/90 hover:bg-slate-800 border border-cyan-500/30 transition text-cyan-300 text-[10px] font-bold font-sans shadow";
-                btn.onclick = openLoginModal;
-            }
+        async function performChangePassword(){
+            const current=document.getElementById('change-current-password').value; const p1=document.getElementById('change-password').value; const p2=document.getElementById('change-password2').value; const error=document.getElementById('password-error');
+            if(!current){ error.textContent='Vui lòng nhập mật khẩu hiện tại.'; error.classList.remove('hidden'); return; }
+            if(p1.length<6){ error.textContent='Mật khẩu mới phải có ít nhất 6 ký tự.'; error.classList.remove('hidden'); return; }
+            if(p1!==p2){ error.textContent='Hai mật khẩu không giống nhau.'; error.classList.remove('hidden'); return; }
+            try{ await window.firebaseChangePassword(current,p1); document.getElementById('change-current-password').value=''; document.getElementById('change-password').value=''; document.getElementById('change-password2').value=''; showAccountPanel(); showToast('🔐 Đã đổi mật khẩu thành công.','success'); }catch(err){ error.textContent=authErrorMessage(err); error.classList.remove('hidden'); }
         }
-
-        async function performLogin() {
-            const username = document.getElementById('login-username').value.trim();
-            const password = document.getElementById('login-password').value;
-            const error = document.getElementById('login-error');
-
-            if (username !== ACCOUNT_USERNAME || password !== ACCOUNT_PASSWORD) {
-                error.textContent = "Sai tên tài khoản hoặc mật khẩu.";
-                error.classList.remove('hidden');
-                return;
-            }
-
-            // Lưu lại dữ liệu khách trước khi thay bằng dữ liệu tài khoản.
-            saveDataForKey(GUEST_STORAGE_KEY);
-
-            const accountKey = ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME;
-            isLoggedIn = true;
-            loggedInUsername = ACCOUNT_USERNAME;
-            localStorage.setItem('hunter_language_system_logged_in', ACCOUNT_USERNAME);
-            let savedAccount = null;
-            try { savedAccount = await loadLocalFirstForKey(accountKey); } catch(e) {}
-            if (!savedAccount) {
-                const legacyAccount=localStorage.getItem(accountKey);
-                if(legacyAccount){try{savedAccount=JSON.parse(legacyAccount);}catch(e){}}
-            }
-            if(savedAccount)gameState=savedAccount;
-            else { gameState=cloneDefaultGameState();localStorage.setItem(accountKey,JSON.stringify(gameState)); }
-            normalizeGameState();
-            checkCycleResets();
-            saveData();
-            // Đăng nhập cũng phải được ghi lên Firebase để các thiết bị khác tự chuyển sang trạng thái ĐÃ ĐĂNG NHẬP.
-            if (typeof window.firebaseAccountLogin === 'function') {
-                await window.firebaseAccountLogin();
-            }
+        async function logoutUser(){
+            if(!isLoggedIn)return; if(!confirm(`Đăng xuất tài khoản ${loggedInUsername}?`))return;
+            saveDataForKey(getActiveStorageKey());
+            try{ await window.firebaseSignOut(); }catch(err){ showToast('⚠ Đăng xuất Firebase thất bại: '+authErrorMessage(err),'error'); return; }
             closeLoginModal();
-            updateAccountUI();
-            renderAll();setCloudConfigInputs();updateSyncUI(navigator.onLine?(cloudConfig.endpoint?'ready':'local'):'offline');
-            if(navigator.onLine)syncNow(false);
-            showToast(`👤 Đã đăng nhập ${ACCOUNT_USERNAME}. Dữ liệu tài khoản local đã sẵn sàng.`, 'success');
-        }
-
-        async function logoutUser() {
-            if (!isLoggedIn) return;
-            if (!confirm("Đăng xuất sẽ quay lại dữ liệu khách trên trình duyệt này. Tiếp tục?")) return;
-
-            saveDataForKey(ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME);
-            // Đẩy trạng thái LOGOUT lên Firebase trước khi đổi UI/local state.
-            if (typeof window.firebaseAccountLogout === 'function') {
-                await window.firebaseAccountLogout();
-            }
-            isLoggedIn = false;
-            loggedInUsername = null;
-            localStorage.removeItem('hunter_language_system_logged_in');
-
-            const guestSaved = localStorage.getItem(GUEST_STORAGE_KEY);
-            if (guestSaved) {
-                try { gameState = JSON.parse(guestSaved); }
-                catch (e) { gameState = cloneDefaultGameState(); }
-            } else {
-                gameState = cloneDefaultGameState();
-            }
-
-            normalizeGameState();
-            checkCycleResets();
-            saveData();
-            updateAccountUI();
-            renderAll();
-            showToast("Đã đăng xuất. Đang dùng dữ liệu khách.", 'success');
         }
 
         // EMBEDDED IMAGE MIGRATION: hỗ trợ dữ liệu đã lưu từ các bản HTML cũ.
@@ -1573,24 +1540,19 @@
 
 
         async function loadData() {
-            // ACCOUNT DuyKhanh: giữ phiên đăng nhập trên thiết bị để lần mở sau tự vào đúng account.
-            const rememberedAccount=localStorage.getItem('hunter_language_system_logged_in');
-            if(rememberedAccount===ACCOUNT_USERNAME){ isLoggedIn=true; loggedInUsername=ACCOUNT_USERNAME; }
+            // Firebase Authentication là nguồn sự thật cho phiên trên từng thiết bị.
+            // Không tự coi localStorage là đã đăng nhập để tránh lộ dữ liệu tài khoản.
+            isLoggedIn=false; loggedInUsername=null;
             try { await openLocalDatabase(); } catch(e) { console.warn('IndexedDB unavailable:',e); }
-            const key=getActiveStorageKey();
-            let saved=await loadLocalFirstForKey(key).catch(()=>null);
-            if(!saved){
-                const legacy=localStorage.getItem(isLoggedIn?ACCOUNT_STORAGE_PREFIX+ACCOUNT_USERNAME:(localStorage.getItem(GUEST_STORAGE_KEY)?GUEST_STORAGE_KEY:STORAGE_KEY));
-                if(legacy){try{saved=JSON.parse(legacy);}catch(e){}}
-            }
+            let saved=await loadLocalFirstForKey(GUEST_STORAGE_KEY).catch(()=>null);
+            if(!saved){ const legacy=localStorage.getItem(GUEST_STORAGE_KEY)||localStorage.getItem(STORAGE_KEY); if(legacy){try{saved=JSON.parse(legacy);}catch(e){}} }
             if(saved)gameState=saved;
-            normalizeGameState();checkCycleResets();
+            normalizeGameState(); checkCycleResets();
             gameState.dailyQuests.forEach(q=>{if(q.baseMinutesAtCreation===undefined)q.baseMinutesAtCreation=(gameState.skills[q.category]?gameState.skills[q.category].totalMinutes:0);});
             gameState.weeklyQuests.forEach(q=>{if(q.baseMinutesAtCreation===undefined)q.baseMinutesAtCreation=(gameState.skills[q.category]?gameState.skills[q.category].totalMinutes:0);});
             if(gameState.monthlyQuest&&gameState.monthlyQuest.baseMinutesAtCreation===undefined)gameState.monthlyQuest.baseMinutesAtCreation=gameState.skills.General.totalMinutes;
-            if(idbDb&&!await idbGet(IDB_STATE_STORE,key).catch(()=>null))await persistLocalFirst('migration');
-            updateAccountUI();setCloudConfigInputs();updateSyncUI(navigator.onLine?(cloudConfig.endpoint?'ready':'local'):'offline');installOnlineSync();
-            if(isLoggedIn&&navigator.onLine)syncNow(false);
+            if(idbDb&&!await idbGet(IDB_STATE_STORE,GUEST_STORAGE_KEY).catch(()=>null))await persistLocalFirst('migration');
+            updateAccountUI(); setCloudConfigInputs(); updateSyncUI(navigator.onLine?(cloudConfig.endpoint?'ready':'local'):'offline'); installOnlineSync();
         }
         function saveData(reason='change'){
             saveDataForKey(getActiveStorageKey());
@@ -3315,271 +3277,120 @@ function activatePotion(itemId) {
     </script>
    <script type="module">
   /* ================================================================
-     FIREBASE REALTIME ACCOUNT SYNC
-     - Một tài khoản DuyKhanh dùng chung cho mọi thiết bị/trình duyệt.
-     - Đồng bộ gameState + trạng thái đăng nhập/đăng xuất theo thời gian thực.
-     - Firestore transaction tạo revision tuần tự để tránh máy này ghi đè
-       snapshot cũ của máy kia.
+     FIREBASE AUTH + FIRESTORE MULTI-ACCOUNT SYNC
+     - Firebase Authentication: username/password trên từng thiết bị.
+     - Firestore: mỗi tài khoản có document users/{username}.
+     - usernames/{normalized}: khóa tên tài khoản duy nhất.
+     - Dữ liệu chỉ được đọc/ghi khi request.auth.uid khớp ownerUid.
      ================================================================ */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import {
-    getFirestore,
-    doc,
-    onSnapshot,
-    runTransaction,
-    serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, updatePassword, updateProfile, signOut, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",
-    authDomain: "hunter-lans.firebaseapp.com",
-    projectId: "hunter-lans",
-    storageBucket: "hunter-lans.firebasestorage.app",
-    messagingSenderId: "167057896841",
-    appId: "1:167057896841:web:a4da206f71141250505d58"
+  const firebaseConfig={apiKey:"AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",authDomain:"hunter-lans.firebaseapp.com",projectId:"hunter-lans",storageBucket:"hunter-lans.firebasestorage.app",messagingSenderId:"167057896841",appId:"1:167057896841:web:a4da206f71141250505d58"};
+  const app=initializeApp(firebaseConfig); const auth=getAuth(app); const db=getFirestore(app);
+  const DEVICE_ID_KEY='hunter_language_system_device_id_v2';
+  const deviceId=(()=>{let id=localStorage.getItem(DEVICE_ID_KEY); if(!id){id=crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);localStorage.setItem(DEVICE_ID_KEY,id);}return id;})();
+  let firebaseReady=false, applyingRemote=false, pendingStateTimer=null, remoteRevision=0, localRevisionForFirebase=0, currentUserDocUnsub=null;
+  const normalizeUsername=u=>String(u||'').trim().toLowerCase();
+  const usernameEmail=u=>`${normalizeUsername(u)}@accounts.hunter-lans.firebaseapp.com`;
+  const usernameDoc=u=>doc(db,'users',normalizeUsername(u));
+  const usernameIndexDoc=u=>doc(db,'usernames',normalizeUsername(u));
+  const cloneState=v=>JSON.parse(JSON.stringify(v));
+  function accountKey(u){return ACCOUNT_STORAGE_PREFIX+normalizeUsername(u);}
+  function writeLocalAccountSnapshot(username,state,revision=0){try{const copy=cloneState(state);localStorage.setItem(accountKey(username),JSON.stringify(copy));if(typeof idbDb!=='undefined'&&idbDb)idbPut(IDB_STATE_STORE,{key:accountKey(username),state:copy,revision:Number(revision||0),updatedAt:Date.now()}).catch(()=>{});}catch(e){console.warn('Local account snapshot:',e);}}
+  function friendlyAuthError(err){ const c=err?.code||''; if(c==='auth/email-already-in-use')return new Error('Tên tài khoản đã tồn tại.'); if(c==='auth/invalid-credential'||c==='auth/invalid-login-credentials')return new Error('Sai tên tài khoản hoặc mật khẩu.'); if(c==='auth/wrong-password')return new Error('Sai mật khẩu.'); if(c==='auth/user-not-found')return new Error('Không tìm thấy tài khoản.'); if(c==='auth/weak-password')return new Error('Mật khẩu phải có ít nhất 6 ký tự.'); if(c==='auth/requires-recent-login')return new Error('Vui lòng đăng nhập lại trước khi đổi mật khẩu.'); return err; }
+  async function loadAccountState(username){
+    const ref=usernameDoc(username); const snap=await getDoc(ref);
+    if(snap.exists()){const d=snap.data()||{}; if(d.ownerUid!==auth.currentUser?.uid)throw new Error('Tài khoản không thuộc phiên xác thực hiện tại.'); return {data:d,state:d.state,revision:Number(d.revision||0)};}
+    // Tạo account doc nếu Auth tồn tại nhưng profile chưa được tạo.
+    const legacyKey=accountKey(username); let local=null; try{const raw=localStorage.getItem(legacyKey);if(raw)local=JSON.parse(raw);}catch(e){}
+    return {data:null,state:local,revision:0};
+  }
+  async function ensureAccountDoc(username,stateIfNew){
+    const ref=usernameDoc(username), idx=usernameIndexDoc(username), uid=auth.currentUser.uid;
+    const result=await runTransaction(db,async tx=>{
+      const idxSnap=await tx.get(idx); const userSnap=await tx.get(ref);
+      if(idxSnap.exists()&&idxSnap.data().uid!==uid)throw new Error('Tên tài khoản đã tồn tại.');
+      if(userSnap.exists()&&userSnap.data().ownerUid!==uid)throw new Error('Tài khoản đã thuộc người dùng khác.');
+      const old=userSnap.exists()?userSnap.data():{}; const nextRevision=Number(old.revision||0)+1;
+      const data={username,normalizedUsername:normalizeUsername(username),ownerUid:uid,revision:nextRevision,updatedAt:serverTimestamp(),updatedByDevice:deviceId,loggedIn:true,state:cloneState(stateIfNew||old.state||cloneDefaultGameState())};
+      tx.set(idx,{uid,username,normalizedUsername:normalizeUsername(username),createdAt:idxSnap.exists()?idxSnap.data().createdAt:serverTimestamp()}, {merge:true});
+      tx.set(ref,data,{merge:true}); return {revision:nextRevision,state:data.state};
+    });
+    return result;
+  }
+  async function applyRemoteAccount(username,remote){
+    applyingRemote=true; loggedInUsername=username; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',username);
+    if(remote?.state){gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();writeLocalAccountSnapshot(username,gameState,Number(remote.revision||0));}
+    remoteRevision=Number(remote?.revision||0); localRevisionForFirebase=remoteRevision; updateAccountUI(); renderAll(); updateSyncUI('synced'); applyingRemote=false;
+  }
+  async function syncCurrentAccountState(force=false){
+    if(!auth.currentUser||!loggedInUsername||applyingRemote)return;
+    const username=loggedInUsername, ref=usernameDoc(username), uid=auth.currentUser.uid;
+    try{const result=await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw new Error('Không tìm thấy hồ sơ tài khoản.');const old=snap.data();if(old.ownerUid!==uid)throw new Error('Không có quyền với tài khoản này.');const next=Number(old.revision||0)+1;tx.set(ref,{revision:next,updatedAt:serverTimestamp(),updatedByDevice:deviceId,loggedIn:true,state:cloneState(gameState)},{merge:true});return next;});localRevisionForFirebase=Number(result);remoteRevision=Math.max(remoteRevision,localRevisionForFirebase);writeLocalAccountSnapshot(username,gameState,localRevisionForFirebase);updateSyncUI('synced');}catch(e){console.error('Firebase state sync',e);updateSyncUI('error');if(force)showToast('⚠ Không thể đồng bộ dữ liệu: '+e.message,'error');}
+  }
+  function scheduleFirebaseStateSync(){if(!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;clearTimeout(pendingStateTimer);pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);}
+
+  window.firebaseSignIn=async function(username,password){
+    try{
+      saveDataForKey(GUEST_STORAGE_KEY); localStorage.setItem('hunter_language_system_logged_in',username);
+
+      const cred=await signInWithEmailAndPassword(auth,usernameEmail(username),password);
+      const canonical=normalizeUsername(username);
+      if(!cred.user.displayName){try{await updateProfile(cred.user,{displayName:canonical});}catch(_){} }
+      const profile=await loadAccountState(canonical);
+      if(profile.data?.username&&profile.data.ownerUid!==cred.user.uid)throw new Error('Tên tài khoản không khớp.');
+      let state=profile.state; if(!state){state=cloneDefaultGameState();}
+      loggedInUsername=canonical; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',canonical); gameState=cloneState(state);normalizeGameState();checkCycleResets();
+      const ensured=await ensureAccountDoc(canonical,gameState);
+      if(ensured.state){gameState=cloneState(ensured.state);normalizeGameState();checkCycleResets();}
+      writeLocalAccountSnapshot(canonical,gameState,ensured.revision); renderAll();updateAccountUI();
+      await syncCurrentAccountState(true);
+    }catch(e){throw friendlyAuthError(e);}
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const userDocRef = doc(db, "users", "DuyKhanh");
+  window.firebaseRegister=async function(username,password){
+    try{
+      const normalized=normalizeUsername(username);
+      const cred=await createUserWithEmailAndPassword(auth,usernameEmail(normalized),password);
+      await updateProfile(cred.user,{displayName:normalized});
+      loggedInUsername=normalized; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',normalized);
+      gameState=cloneDefaultGameState(); normalizeGameState();
+      await ensureAccountDoc(normalized,gameState);
+      writeLocalAccountSnapshot(normalized,gameState,1); renderAll();updateAccountUI();updateSyncUI('synced');
+    }catch(e){try{await signOut(auth);}catch(_){} isLoggedIn=false;loggedInUsername=null;throw friendlyAuthError(e);}
+  };
 
-  const DEVICE_ID_KEY = "hunter_language_system_device_id_v1";
-  const deviceId = (() => {
-    let id = localStorage.getItem(DEVICE_ID_KEY);
-    if (!id) {
-      id = (crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2)));
-      localStorage.setItem(DEVICE_ID_KEY, id);
-    }
-    return id;
-  })();
+  window.firebaseChangePassword=async function(currentPassword,newPassword){
+    const user=auth.currentUser; if(!user||!loggedInUsername)throw new Error('Chưa đăng nhập Firebase.');
+    try{const credential=EmailAuthProvider.credential(user.email,currentPassword); await reauthenticateWithCredential(user,credential); await updatePassword(user,newPassword);}catch(e){throw friendlyAuthError(e);}
+  };
+  window.firebaseSignOut=async function(){clearTimeout(pendingStateTimer); if(auth.currentUser&&loggedInUsername){try{const ref=usernameDoc(loggedInUsername),uid=auth.currentUser.uid;await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(snap.exists()&&snap.data().ownerUid===uid)tx.set(ref,{loggedIn:false,lastLogoutAt:serverTimestamp(),lastLogoutDeviceId:deviceId},{merge:true});});}catch(e){console.warn('Logout marker:',e);}} await signOut(auth);};
 
-  let applyingRemote = false;
-  let firebaseReady = false;
-  let remoteRevision = 0;
-  let localRevisionForFirebase = 0;
-  let pendingStateTimer = null;
-  let lastRemoteLoginState = null;
-
-  function cloneState(value) {
-    return JSON.parse(JSON.stringify(value));
-  }
-
-  function writeLocalAccountSnapshot(state, revision = 0) {
-    try {
-      const copy = cloneState(state);
-      localStorage.setItem(ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME, JSON.stringify(copy));
-      if (typeof idbDb !== 'undefined' && idbDb) {
-        idbPut(IDB_STATE_STORE, {
-          key: ACCOUNT_STORAGE_PREFIX + ACCOUNT_USERNAME,
-          state: copy,
-          revision: Number(revision || 0),
-          updatedAt: Date.now()
-        }).catch(() => {});
+  onAuthStateChanged(auth,async user=>{
+    firebaseReady=true;
+    if(currentUserDocUnsub){currentUserDocUnsub();currentUserDocUnsub=null;}
+    if(!user){isLoggedIn=false;loggedInUsername=null;localStorage.removeItem('hunter_language_system_logged_in');updateAccountUI();updateSyncUI('ready');return;}
+    try{
+      // Username is stored in Auth displayName only after first successful profile setup.
+      let username=user.displayName;
+      if(!username){
+        const remembered=localStorage.getItem('hunter_language_system_logged_in'); if(remembered)username=normalizeUsername(remembered);
       }
-    } catch (e) {
-      console.warn("Không thể lưu snapshot account local:", e);
-    }
-  }
-
-  async function writeFirebaseAccount(patch, includeState = false) {
-    if (!firebaseReady) return;
-    try {
-      const result = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(userDocRef);
-        const old = snap.exists() ? snap.data() : {};
-        const nextRevision = Number(old.revision || 0) + 1;
-        const data = {
-          username: ACCOUNT_USERNAME,
-          revision: nextRevision,
-          updatedAt: serverTimestamp(),
-          updatedByDevice: deviceId,
-          ...patch
-        };
-        if (includeState && typeof gameState !== 'undefined') data.state = cloneState(gameState);
-        tx.set(userDocRef, data, { merge: true });
-        return nextRevision;
-      });
-      localRevisionForFirebase = Number(result || localRevisionForFirebase);
-      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
-      updateSyncUI('synced');
-    } catch (err) {
-      console.error("Firebase sync error:", err);
-      updateSyncUI('error');
-    }
-  }
-
-  function scheduleFirebaseStateSync() {
-    if (!firebaseReady || !isLoggedIn || applyingRemote) return;
-    clearTimeout(pendingStateTimer);
-    pendingStateTimer = setTimeout(() => {
-      writeFirebaseAccount({
-        loggedIn: true,
-        sessionChangedAt: serverTimestamp()
-      }, true);
-    }, 350);
-  }
-
-  // API nội bộ để performLogin/logoutUser gọi được dù module chạy sau script chính.
-  window.firebaseAccountLogin = async function () {
-    if (!firebaseReady) return;
-    try {
-      const result = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(userDocRef);
-        const old = snap.exists() ? snap.data() : {};
-        const hasRemoteState = old.state && typeof old.state === 'object';
-        const nextRevision = Number(old.revision || 0) + 1;
-
-        // Nếu cloud đã có dữ liệu DuyKhanh, luôn lấy snapshot cloud làm nguồn sự thật.
-        // Điều này ngăn một máy mới đăng nhập bằng dữ liệu local cũ ghi đè dữ liệu mới nhất.
-        if (hasRemoteState) {
-          applyingRemote = true;
-          gameState = cloneState(old.state);
-          normalizeGameState();
-          checkCycleResets();
-          writeLocalAccountSnapshot(gameState, nextRevision);
-          applyingRemote = false;
-        }
-
-        const data = {
-          username: ACCOUNT_USERNAME,
-          revision: nextRevision,
-          updatedAt: serverTimestamp(),
-          updatedByDevice: deviceId,
-          loggedIn: true,
-          sessionChangedAt: serverTimestamp(),
-          sessionDeviceId: deviceId,
-          state: cloneState(gameState)
-        };
-        tx.set(userDocRef, data, { merge: true });
-        return nextRevision;
-      });
-
-      localRevisionForFirebase = Number(result || localRevisionForFirebase);
-      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
-      renderAll();
-      updateAccountUI();
-      updateSyncUI('synced');
-    } catch (err) {
-      console.error("Firebase login sync:", err);
-      updateSyncUI('error');
-      showToast('⚠ Không thể đồng bộ phiên đăng nhập với Firebase: ' + err.message, 'error');
-    }
-  };
-
-  window.firebaseAccountLogout = async function () {
-    if (!firebaseReady) return;
-    clearTimeout(pendingStateTimer);
-    await writeFirebaseAccount({
-      loggedIn: false,
-      sessionChangedAt: serverTimestamp(),
-      sessionDeviceId: deviceId
-    }, false);
-  };
-
-  // Lắng nghe REALTIME: state và trạng thái login/logout đều cập nhật ngay trên máy khác.
-  onSnapshot(userDocRef, (snap) => {
-    if (!snap.exists()) {
-      firebaseReady = true;
-      return;
-    }
-
-    firebaseReady = true;
-    const remote = snap.data() || {};
-    const rr = Number(remote.revision || 0);
-    const remoteLoggedIn = remote.loggedIn === true;
-    const remoteState = remote.state;
-    const changedByThisDevice = remote.updatedByDevice === deviceId;
-
-    remoteRevision = Math.max(remoteRevision, rr);
-
-    // Snapshot do chính máy này vừa ghi: không nạp ngược lại để tránh vòng lặp.
-    if (changedByThisDevice) {
-      lastRemoteLoginState = remoteLoggedIn;
-      if (remoteLoggedIn && remoteState) writeLocalAccountSnapshot(remoteState, rr);
-      return;
-    }
-
-    // 1) Đồng bộ trạng thái đăng nhập/đăng xuất.
-    if (lastRemoteLoginState !== remoteLoggedIn) {
-      lastRemoteLoginState = remoteLoggedIn;
-
-      if (remoteLoggedIn) {
-        applyingRemote = true;
-        isLoggedIn = true;
-        loggedInUsername = ACCOUNT_USERNAME;
-        localStorage.setItem('hunter_language_system_logged_in', ACCOUNT_USERNAME);
-
-        if (remoteState) {
-          gameState = cloneState(remoteState);
-          normalizeGameState();
-          checkCycleResets();
-          writeLocalAccountSnapshot(gameState, rr);
-          renderAll();
-        }
-
-        updateAccountUI();
-        updateSyncUI('synced');
-        applyingRemote = false;
-        showToast(`🔄 ${ACCOUNT_USERNAME} đã đăng nhập trên thiết bị khác — phiên này đã tự đồng bộ.`, 'success');
-      } else {
-        // Đăng xuất trên một thiết bị => trạng thái phiên của tài khoản cũng đăng xuất trên các thiết bị khác.
-        applyingRemote = true;
-        isLoggedIn = false;
-        loggedInUsername = null;
-        localStorage.removeItem('hunter_language_system_logged_in');
-
-        const guestSaved = localStorage.getItem(GUEST_STORAGE_KEY);
-        if (guestSaved) {
-          try { gameState = JSON.parse(guestSaved); }
-          catch (e) { gameState = cloneDefaultGameState(); }
-        } else {
-          gameState = cloneDefaultGameState();
-        }
-        normalizeGameState();
-        checkCycleResets();
-        updateAccountUI();
-        renderAll();
-        updateSyncUI('synced');
-        applyingRemote = false;
-        showToast(`🔒 ${ACCOUNT_USERNAME} đã đăng xuất từ thiết bị khác.`, 'success');
-      }
-      return;
-    }
-
-    // 2) Đồng bộ gameState realtime.
-    if (remoteLoggedIn && remoteState && rr > localRevisionForFirebase) {
-      applyingRemote = true;
-      gameState = cloneState(remoteState);
-      normalizeGameState();
-      checkCycleResets();
-      localRevisionForFirebase = rr;
-      writeLocalAccountSnapshot(gameState, rr);
-      renderAll();
-      updateSyncUI('synced');
-      applyingRemote = false;
-    }
-  }, (err) => {
-    console.error("Firebase realtime listener:", err);
-    firebaseReady = true;
-    updateSyncUI('error');
+      if(!username)throw new Error('Không xác định được tên tài khoản.');
+      loggedInUsername=username; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',username);
+      const ref=usernameDoc(username); const snap=await getDoc(ref);
+      if(!snap.exists()){await ensureAccountDoc(username,gameState);} else {const remote=snap.data()||{};if(remote.ownerUid!==user.uid)throw new Error('Tài khoản không thuộc người dùng hiện tại.'); if(remote.state){gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();writeLocalAccountSnapshot(username,gameState,remote.revision||0);} }
+      currentUserDocUnsub=onSnapshot(ref,s=>{if(!s.exists()||applyingRemote)return;const remote=s.data()||{};if(remote.ownerUid!==auth.currentUser?.uid){showToast('⚠ Quyền tài khoản không hợp lệ.','error');return;} if(remote.loggedIn===false && remote.lastLogoutDeviceId!==deviceId){ // global logout marker
+          signOut(auth).catch(()=>{}); return; }
+        if(remote.state&&Number(remote.revision||0)>localRevisionForFirebase){applyingRemote=true;gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();remoteRevision=Number(remote.revision||0);localRevisionForFirebase=remoteRevision;writeLocalAccountSnapshot(username,gameState,remoteRevision);renderAll();updateSyncUI('synced');applyingRemote=false;}
+      },err=>{console.error('Account listener',err);updateSyncUI('error');});
+      updateAccountUI();renderAll();updateSyncUI('synced');
+    }catch(e){console.error('Auth bootstrap',e);await signOut(auth).catch(()=>{});showToast('⚠ Không thể mở tài khoản: '+e.message,'error');}
   });
 
-  // Hook vào saveData hiện có: local-first vẫn chạy như cũ, sau đó snapshot được đẩy lên Firebase.
-  const originalSaveData = window.saveData;
-  window.saveData = function(reason = 'change') {
-    if (typeof originalSaveData === 'function') originalSaveData(reason);
-    scheduleFirebaseStateSync();
-  };
-
-  firebaseReady = true;
-  updateSyncUI('syncing');
-
-  // Nếu trang được mở lại và local đang nhớ DuyKhanh, listener sẽ lấy state mới nhất từ cloud.
-  if (typeof isLoggedIn !== 'undefined' && isLoggedIn) {
-    setTimeout(() => {
-      if (navigator.onLine) scheduleFirebaseStateSync();
-    }, 500);
-  }
+  const originalSaveData=window.saveData; window.saveData=function(reason='change'){if(typeof originalSaveData==='function')originalSaveData(reason);scheduleFirebaseStateSync();};
+  firebaseReady=true;
 </script>
-</body>
 </html>
