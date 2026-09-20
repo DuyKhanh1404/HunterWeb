@@ -1343,16 +1343,17 @@
             dot.className='w-2 h-2 rounded-full '+dc;label.textContent=tx;label.className=cl;
             if(status)status.textContent=cloudConfig.endpoint?(state==='synced'?'Đã đồng bộ':state==='error'?'Lỗi đồng bộ':'Đã cấu hình'):'Chưa cấu hình';
         }
-        async function cloudRequest(method='GET',payload=null){
-            if(window.__hunterResetInProgress) return null;
-            if(!cloudConfig.endpoint)throw new Error('Chưa cấu hình Cloud Endpoint.');
-            const url=cloudConfig.endpoint+(cloudConfig.endpoint.includes('?')?'&':'?')+'username='+encodeURIComponent(ACCOUNT_USERNAME);
-            const headers={'Accept':'application/json'}; if(payload!==null)headers['Content-Type']='application/json';
-            if(cloudConfig.token)headers['Authorization']='Bearer '+cloudConfig.token;
-            const res=await fetch(url,{method,headers,body:payload===null?undefined:JSON.stringify(payload),cache:'no-store'});
-            if(!res.ok)throw new Error('Cloud HTTP '+res.status);
-            return res.status===204?null:await res.json();
-        }
+        async function cloudRequest(method=null, payload=null){
+    if (!method) method = payload !== null ? 'POST' : 'GET';
+    if(window.__hunterResetInProgress) return null;
+    if(!cloudConfig.endpoint)throw new Error('Chưa cấu hình Cloud Endpoint.');
+    const url=cloudConfig.endpoint+(cloudConfig.endpoint.includes('?')?'&':'?')+'username='+encodeURIComponent(ACCOUNT_USERNAME);
+    const headers={'Accept':'application/json'}; if(payload!==null)headers['Content-Type']='application/json';
+    if(cloudConfig.token)headers['Authorization']='Bearer '+cloudConfig.token;
+    const res=await fetch(url,{method,headers,body:payload===null?undefined:JSON.stringify(payload),cache:'no-store'});
+    if(!res.ok)throw new Error('Cloud HTTP '+res.status);
+    return res.status===204?null:await res.json();
+}
         // CLOUD SYNC: POST/PUT dùng cùng một snapshot contract để tương thích Worker/Supabase/REST API.
         async function cloudPush(payload){
             if(window.__hunterResetInProgress) return null;
@@ -2259,31 +2260,35 @@ function logActivity(text) {
         localStorage.removeItem(activeKey);
 
         // 3. Đưa gameState về ban đầu
-        gameState = resetState;
-        normalizeGameState();
-        checkCycleResets();
+    gameState = resetState;
+    normalizeGameState();
+    checkCycleResets();
 
-        // 4. Tài khoản Firebase: reset trực tiếp document Firestore.
-        // Không gọi auth/syncCurrentAccountState ở script thường vì chúng nằm trong ES module.
-        if (isLoggedIn && username) {
-            localStorage.setItem('hunter_pending_reset_' + username, 'true');
-            writeLocalAccountSnapshot(username, gameState, Date.now());
+    // 4. Tài khoản Firebase: reset trực tiếp document Firestore.
+    if (isLoggedIn && username) {
+        localStorage.setItem('hunter_pending_reset_' + username, 'true');
+        writeLocalAccountSnapshot(username, gameState, Date.now());
 
-            if (typeof window.firebaseResetCurrentAccountState === 'function') {
+        if (typeof window.firebaseResetCurrentAccountState === 'function') {
+            try {
                 await window.firebaseResetCurrentAccountState(username, gameState);
                 localStorage.removeItem('hunter_pending_reset_' + username);
                 updateSyncUI('synced');
-            } else {
-                updateSyncUI(navigator.onLine ? 'error' : 'offline');
-                throw new Error('Firebase module chưa sẵn sàng. Vui lòng thử lại sau khi trang tải xong.');
+            } catch (cloudErr) {
+                console.error("Lỗi đồng bộ Firebase:", cloudErr);
+                updateSyncUI('error');
             }
         } else {
-            saveData("reset");
-            updateSyncUI("saved");
+            updateSyncUI(navigator.onLine ? 'error' : 'offline');
+            console.warn('Firebase module chưa sẵn sàng.');
         }
+    } else {
+        saveData("reset");
+        updateSyncUI("saved");
+    }
 
-        renderAll();
-        updateAccountUI();
+    renderAll();
+    updateAccountUI();
         window.__hunterResetInProgress = false;
         showToast("♻️ Đã Reset toàn bộ tiến trình hiện tại.", "success");
     } catch(e) {
