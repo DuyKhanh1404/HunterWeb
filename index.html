@@ -3494,36 +3494,37 @@ const app=initializeApp(firebaseConfig);
     if(currentUserDocUnsub){currentUserDocUnsub(); currentUserDocUnsub=null;}
 
     // Kiểm tra tên tài khoản ghi nhớ trong LocalStorage
-    const rememberedUser = localStorage.getItem('hunter_language_system_logged_in');
+    // Kiểm tra tên tài khoản ghi nhớ trong LocalStorage
+  const rememberedUser = localStorage.getItem('hunter_language_system_logged_in');
 
-    if(!user) {
-      if(rememberedUser) {
-        // TRƯỜNG HỢP OFFLINE: Không có mạng Firebase Auth nhưng vẫn nhớ tài khoản trong máy
-        loggedInUsername = normalizeUsername(rememberedUser);
-        isLoggedIn = true;
+  if(!user) {
+    if(rememberedUser) {
+      // 🟢 GIỮ NGUYÊN PHIÊN ĐĂNG NHẬP KHI MẤT MẠNG
+      loggedInUsername = normalizeUsername(rememberedUser);
+      isLoggedIn = true;
 
-        // Load dữ liệu offline từ snapshot cục bộ đã lưu trước đó
-        const localData = localStorage.getItem(accountKey(loggedInUsername));
-        if(localData) {
-          try {
-            gameState = JSON.parse(localData);
-            normalizeGameState();
-            checkCycleResets();
-          } catch(e) {}
-        }
-        updateAccountUI();
-        renderAll();
-        updateSyncUI('offline');
-        return;
-      } else {
-        // Thực sự đăng xuất
-        isLoggedIn = false;
-        loggedInUsername = null;
-        updateAccountUI();
-        updateSyncUI('ready');
-        return;
+      // Load dữ liệu offline từ snapshot cục bộ đã lưu trước đó
+      const localData = localStorage.getItem(accountKey(loggedInUsername));
+      if(localData) {
+        try {
+          gameState = JSON.parse(localData);
+          normalizeGameState();
+          checkCycleResets();
+        } catch(e) {}
       }
+      updateAccountUI();
+      renderAll();
+      updateSyncUI('offline');
+      return; // Dừng lại ở đây, KHÔNG đăng xuất!
+    } else {
+      // Thực sự đăng xuất khi không tìm thấy tài khoản ghi nhớ
+      isLoggedIn = false;
+      loggedInUsername = null;
+      updateAccountUI();
+      updateSyncUI('ready');
+      return;
     }
+  }
 
     // NẾU CÓ USER (ONLINE VÀ DÙNG MẠNG BÌNH THƯỜNG)
     try {
@@ -3587,18 +3588,27 @@ const app=initializeApp(firebaseConfig);
     }
   });
 
-  const originalSaveData=window.saveData; window.saveData=function(reason='change'){if(typeof originalSaveData==='function')originalSaveData(reason);scheduleFirebaseStateSync();};
-  window.__hunterFirebaseFlushOffline=async function(){
-    if(!auth.currentUser||!loggedInUsername)return;
-    clearTimeout(pendingStateTimer);
-    await syncCurrentAccountState(true);
+  const originalSaveData = window.saveData; 
+  window.saveData = function(reason = 'change') {
+    if(typeof originalSaveData === 'function') {
+      try { originalSaveData(reason); } catch(e) {}
+    }
+
+    // 🟢 BẮT BUỘC LƯU XUỐNG LOCALSTORAGE NGAY LẬP TỨC ĐỂ KHÔNG MẤT DỮ LIỆU OFFLINE
+    if(loggedInUsername && typeof gameState !== 'undefined') {
+      try {
+        const key = typeof accountKey === 'function' ? accountKey(loggedInUsername) : `hunter_account_${loggedInUsername}`;
+        // Tăng revision hoặc lưu state hiện tại kèm mốc thời gian
+        localStorage.setItem(key, JSON.stringify(gameState));
+      } catch(err) {
+        console.error('Lỗi lưu dữ liệu offline:', err);
+      }
+    }
+
+    // Gọi đồng bộ lên Firebase nếu có mạng
+    if(typeof scheduleFirebaseStateSync === 'function') {
+      scheduleFirebaseStateSync();
+    }
   };
-  firebaseReady=true;
-  // Đăng ký bộ nhớ đệm Offline cho toàn bộ Web
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-  }
 </script>
 </html>
