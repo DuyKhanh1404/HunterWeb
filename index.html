@@ -3306,45 +3306,60 @@ function activatePotion(itemId) {
 }
     </script>
     <script type="module">
-  // Import Firebase App và Firestore (CSDL đồng bộ)
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // Cấu hình Firebase của bạn
   const firebaseConfig = {
     apiKey: "AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",
     authDomain: "hunter-lans.firebaseapp.com",
     projectId: "hunter-lans",
     storageBucket: "hunter-lans.firebasestorage.app",
     messagingSenderId: "167057896841",
-    appId: "1:167057896841:web:a4da206f71141250505d58",
-    measurementId: "G-MGPL6BRR8J"
+    appId: "1:167057896841:web:a4da206f71141250505d58"
   };
 
-  // Khởi tạo
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  // Đường dẫn dữ liệu riêng cho tài khoản DuyKhanh
   const userDocRef = doc(db, "users", "DuyKhanh");
 
-  // Tự động nhận dữ liệu mới nhất từ Cloud xuống điện thoại/máy tính
+  let isRemoteChange = false;
+
+  // 1. NHẬN DỮ LIỆU TỪ FIREBASE VỀ (Đồng bộ Realtime sang máy tính/iPhone khác)
   onSnapshot(userDocRef, (docSnap) => {
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      console.log("Dữ liệu đồng bộ thành công:", data);
+      const remoteData = docSnap.data();
+      if (typeof gameState !== 'undefined') {
+        isRemoteChange = true;
+        
+        // Ghi đè dữ liệu mới nhận vào gameState
+        Object.assign(gameState, remoteData);
+        
+        // Cập nhật lại toàn bộ giao diện web
+        if (typeof renderAll === 'function') {
+          renderAll();
+        } else if (typeof render === 'function') {
+          render();
+        }
+        
+        setTimeout(() => { isRemoteChange = false; }, 500);
+      }
     }
   });
 
-  // Hàm để lưu dữ liệu từ web lên Cloud
-  window.saveUserData = async function(dataToSave) {
-    try {
-      await setDoc(userDocRef, { ...dataToSave, updatedAt: new Date().toISOString() }, { merge: true });
-      console.log("Đã lưu dữ liệu lên Cloud!");
-    } catch (e) {
-      console.error("Lỗi lưu dữ liệu:", e);
+  // 2. TỰ ĐỘNG LẮNG NGHE HÀM saveData GỐC CỦA WEB ĐỂ GỬI LÊN FIREBASE
+  const originalSaveData = window.saveData;
+  window.saveData = function() {
+    // Chạy hàm saveData gốc của web (lưu LocalStorage)
+    if (typeof originalSaveData === 'function') {
+      originalSaveData();
+    }
+    
+    // Đẩy toàn bộ gameState lên Firebase Firestore
+    if (!isRemoteChange && typeof gameState !== 'undefined') {
+      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
     }
   };
+</script>
 </script>
 </body>
 </html>
