@@ -3324,56 +3324,72 @@ function activatePotion(itemId) {
 
   let isRemoteChange = false;
 
-  // 1. NHẬN DỮ LIỆU TỪ FIREBASE VỀ (Lắng nghe & Đổi giao diện Đăng nhập / Đăng xuất Realtime)
+  // Hàm hỗ trợ dọn dẹp bộ đếm thời gian (Intervals) khi Đăng xuất
+  function clearAllActiveTimers() {
+    // Xóa toàn bộ interval đang chạy ẩn trong trình duyệt
+    let highestIntervalId = setInterval(";");
+    for (let i = 0; i <= highestIntervalId; i++) {
+      clearInterval(i);
+    }
+  }
+
+  // 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE REALTIME
   onSnapshot(userDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const remoteData = docSnap.data();
       if (typeof gameState !== 'undefined') {
         isRemoteChange = true;
-        
-        // Ghi đè dữ liệu nhận từ Cloud vào gameState
-        Object.assign(gameState, remoteData);
-        
-        // Cập nhật lại toàn bộ giao diện game gốc
-        if (typeof renderAll === 'function') renderAll();
-        if (typeof render === 'function') render();
 
-        // 🎯 ĐỒNG BỘ TRẠNG THÁI NÚT ĐĂNG NHẬP / ĐĂNG XUẤT CHO NGƯỜI DÙNG BIẾT
-        const isLogged = Boolean(gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged));
-        const authButtons = document.querySelectorAll("#loginBtn, #authBtn, .login-btn, [onclick*='login'], [onclick*='logout'], [onclick*='Thoat'], [onclick*='Auth']");
-        
-        authButtons.forEach(btn => {
-          if (!isLogged) {
-            // Khi thiết bị kia ĐĂNG XUẤT -> Chuyển thiết bị này sang nút ĐĂNG NHẬP
+        // Kiểm tra xem dữ liệu từ xa gửi về là ĐĂNG NHẬP hay ĐĂNG XUẤT
+        const isLogged = Boolean(remoteData.currentUser || remoteData.isLoggedIn || (remoteData.user && remoteData.user.isLogged));
+
+        if (!isLogged) {
+          // --- XỬ LÝ TRẠNG THÁI ĐĂNG XUẤT ---
+          clearAllActiveTimers(); // Dừng sạch đếm ngược vật phẩm / buff
+
+          // Reset biến local về mặc định
+          gameState.currentUser = null;
+          gameState.isLoggedIn = false;
+          if (gameState.user) gameState.user.isLogged = false;
+
+          // Cập nhật nút Đăng nhập trên giao diện
+          const authButtons = document.querySelectorAll("#loginBtn, #authBtn, .login-btn, [onclick*='login'], [onclick*='logout'], [onclick*='Thoat'], [onclick*='Auth']");
+          authButtons.forEach(btn => {
             btn.innerHTML = `<span class="flex items-center gap-1.5"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg> ĐĂNG NHẬP</span>`;
-          } else {
-            // Khi thiết bị kia ĐĂNG NHẬP -> Chuyển thiết bị này sang nút THOÁT / TÊN TÀI KHOẢN
-            const name = gameState.currentUser || 'DuyKhanh';
-            btn.innerHTML = `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${name} • THOÁT</span>`;
-          }
-        });
+          });
 
-        // Chạy thêm các hàm cập nhật UI Auth nội bộ của web nếu có
-        if (typeof updateAuthUI === 'function') updateAuthUI();
-        if (typeof checkAuth === 'function') checkAuth();
-        if (typeof renderHeader === 'function') renderHeader();
+          // Tải lại giao diện về trạng thái trống
+          if (typeof renderAll === 'function') renderAll();
+          if (typeof render === 'function') render();
+        } else {
+          // --- XỬ LÝ TRẠNG THÁI ĐĂNG NHẬP ---
+          Object.assign(gameState, remoteData);
+
+          const authButtons = document.querySelectorAll("#loginBtn, #authBtn, .login-btn, [onclick*='login'], [onclick*='logout'], [onclick*='Thoat'], [onclick*='Auth']");
+          const name = gameState.currentUser || 'DuyKhanh';
+          authButtons.forEach(btn => {
+            btn.innerHTML = `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${name} • THOÁT</span>`;
+          });
+
+          if (typeof renderAll === 'function') renderAll();
+          if (typeof render === 'function') render();
+        }
 
         setTimeout(() => { isRemoteChange = false; }, 500);
       }
     }
   });
 
-  // 2. CHỈ ĐỒNG BỘ DỮ LIỆU LÊN FIREBASE KHI ĐANG Ở TRẠNG THÁI ĐĂNG NHẬP
+  // 2. CHỈ LƯU VÀ ĐỒNG BỘ KHI ĐANG ĐĂNG NHẬP (BỎ QUA KHI LÀ KHÁCH / ĐÃ ĐĂNG XUẤT)
   const originalSaveData = window.saveData;
   window.saveData = function() {
     if (typeof originalSaveData === 'function') {
       originalSaveData();
     }
     
-    // Kiểm tra xem tài khoản có đang ở trạng thái đăng nhập hay không
     const isUserLogged = Boolean(gameState && (gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged)));
 
-    // 🛑 NẾU KHÔNG ĐĂNG NHẬP -> BỎ QUA KHÔNG ĐẨY LÊN FIREBASE
+    // Nếu không đăng nhập -> Bỏ qua không lưu lên Firestore
     if (!isRemoteChange && typeof gameState !== 'undefined' && isUserLogged) {
       setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
     }
