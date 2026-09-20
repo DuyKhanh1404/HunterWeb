@@ -3417,26 +3417,102 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
   };
   window.firebaseSignOut=async function(){clearTimeout(pendingStateTimer); if(auth.currentUser&&loggedInUsername){try{const ref=usernameDoc(loggedInUsername),uid=auth.currentUser.uid;await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(snap.exists()&&snap.data().ownerUid===uid)tx.set(ref,{loggedIn:false,lastLogoutAt:serverTimestamp(),lastLogoutDeviceId:deviceId},{merge:true});});}catch(e){console.warn('Logout marker:',e);}} await signOut(auth);};
 
-  onAuthStateChanged(auth,async user=>{
-    firebaseReady=true;
-    if(currentUserDocUnsub){currentUserDocUnsub();currentUserDocUnsub=null;}
-    if(!user){isLoggedIn=false;loggedInUsername=null;localStorage.removeItem('hunter_language_system_logged_in');updateAccountUI();updateSyncUI('ready');return;}
-    try{
-      // Username is stored in Auth displayName only after first successful profile setup.
-      let username=user.displayName;
-      if(!username){
-        const remembered=localStorage.getItem('hunter_language_system_logged_in'); if(remembered)username=normalizeUsername(remembered);
+ onAuthStateChanged(auth, async user => {
+    firebaseReady = true;
+    if(currentUserDocUnsub){currentUserDocUnsub(); currentUserDocUnsub=null;}
+
+    // Kiểm tra tên tài khoản ghi nhớ trong LocalStorage
+    const rememberedUser = localStorage.getItem('hunter_language_system_logged_in');
+
+    if(!user) {
+      if(rememberedUser) {
+        // TRƯỜNG HỢP OFFLINE: Không có mạng Firebase Auth nhưng vẫn nhớ tài khoản trong máy
+        loggedInUsername = normalizeUsername(rememberedUser);
+        isLoggedIn = true;
+
+        // Load dữ liệu offline từ snapshot cục bộ đã lưu trước đó
+        const localData = localStorage.getItem(accountKey(loggedInUsername));
+        if(localData) {
+          try {
+            gameState = JSON.parse(localData);
+            normalizeGameState();
+            checkCycleResets();
+          } catch(e) {}
+        }
+        updateAccountUI();
+        renderAll();
+        updateSyncUI('offline');
+        return;
+      } else {
+        // Thực sự đăng xuất
+        isLoggedIn = false;
+        loggedInUsername = null;
+        updateAccountUI();
+        updateSyncUI('ready');
+        return;
       }
-      if(!username)throw new Error('Không xác định được tên tài khoản.');
-      loggedInUsername=username; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',username);
-      const ref=usernameDoc(username); const snap=await getDoc(ref);
-      if(!snap.exists()){await ensureAccountDoc(username,gameState);} else {const remote=snap.data()||{};if(remote.ownerUid!==user.uid)throw new Error('Tài khoản không thuộc người dùng hiện tại.'); if(remote.state){gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();writeLocalAccountSnapshot(username,gameState,remote.revision||0);} }
-      currentUserDocUnsub=onSnapshot(ref,s=>{if(!s.exists()||applyingRemote)return;const remote=s.data()||{};if(remote.ownerUid!==auth.currentUser?.uid){showToast('⚠ Quyền tài khoản không hợp lệ.','error');return;} if(remote.loggedIn===false && remote.lastLogoutDeviceId!==deviceId){ // global logout marker
-          signOut(auth).catch(()=>{}); return; }
-        if(remote.state&&Number(remote.revision||0)>localRevisionForFirebase){applyingRemote=true;gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();remoteRevision=Number(remote.revision||0);localRevisionForFirebase=remoteRevision;writeLocalAccountSnapshot(username,gameState,remoteRevision);renderAll();updateSyncUI('synced');applyingRemote=false;}
-      },err=>{console.error('Account listener',err);updateSyncUI('error');});
-      updateAccountUI();renderAll();updateSyncUI('synced');
-    }catch(e){console.error('Auth bootstrap',e);await signOut(auth).catch(()=>{});showToast('⚠ Không thể mở tài khoản: '+e.message,'error');}
+    }
+
+    // NẾU CÓ USER (ONLINE VÀ DÙNG MẠNG BÌNH THƯỜNG)
+    try {
+      let username = user.displayName || (rememberedUser ? normalizeUsername(rememberedUser) : null);
+      if(!username) throw new Error('Không xác định được tên tài khoản.');
+
+      loggedInUsername = username;
+      isLoggedIn = true;
+      localStorage.setItem('hunter_language_system_logged_in', username);
+
+      const ref = usernameDoc(username);
+      const snap = await getDoc(ref);
+
+      if(!snap.exists()){
+        await ensureAccountDoc(username, gameState);
+      } else {
+        const remote = snap.data() || {};
+        if(remote.ownerUid !== user.uid) throw new Error('Tài khoản không thuộc người dùng hiện tại.');
+        if(remote.state){
+          gameState = cloneState(remote.state);
+          normalizeGameState();
+          checkCycleResets();
+          writeLocalAccountSnapshot(username, gameState, remote.revision || 0);
+        }
+      }
+
+      currentUserDocUnsub = onSnapshot(ref, s => {
+        if(!s.exists() || applyingRemote) return;
+        const remote = s.data() || {};
+        if(remote.ownerUid !== auth.currentUser?.uid){
+          showToast('⚠ Quyền tài khoản không hợp lệ.', 'error');
+          return;
+        }
+        if(remote.loggedIn === false && remote.lastLogoutDeviceId !== deviceId){
+          signOut(auth).catch(() => {});
+          return;
+        }
+        if(remote.state && Number(remote.revision || 0) > localRevisionForFirebase){
+          applyingRemote = true;
+          gameState = cloneState(remote.state);
+          normalizeGameState();
+          checkCycleResets();
+          remoteRevision = Number(remote.revision || 0);
+          localRevisionForFirebase = remoteRevision;
+          writeLocalAccountSnapshot(username, gameState, remoteRevision);
+          renderAll();
+          updateSyncUI('synced');
+          applyingRemote = false;
+        }
+      }, err => {
+        console.error('Account listener', err);
+        updateSyncUI('offline');
+      });
+
+      updateAccountUI();
+      renderAll();
+      updateSyncUI('synced');
+    } catch(e) {
+      console.error('Auth bootstrap', e);
+      updateSyncUI('offline');
+    }
   });
 
   const originalSaveData=window.saveData; window.saveData=function(reason='change'){if(typeof originalSaveData==='function')originalSaveData(reason);scheduleFirebaseStateSync();};
