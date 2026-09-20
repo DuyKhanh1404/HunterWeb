@@ -3324,7 +3324,7 @@ function activatePotion(itemId) {
 
   let isRemoteChange = false;
 
-  // 1. NHẬN DỮ LIỆU TỪ FIREBASE VỀ (Đồng bộ Realtime sang máy tính/iPhone khác)
+  // 1. NHẬN DỮ LIỆU TỪ FIREBASE VỀ (Đồng bộ Realtime)
   onSnapshot(userDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const remoteData = docSnap.data();
@@ -3335,18 +3335,19 @@ function activatePotion(itemId) {
         Object.assign(gameState, remoteData);
         
         // Cập nhật lại toàn bộ giao diện web
-        if (typeof renderAll === 'function') {
-          renderAll();
-        } else if (typeof render === 'function') {
-          render();
+        if (typeof renderAll === 'function') renderAll();
+        if (typeof render === 'function') render();
+
+        // ÉP CẬP NHẬT GIAO DIỆN NÚT ĐĂNG NHẬP / ĐĂNG XUẤT
+        const loginBtn = document.querySelector("#loginBtn, #authBtn, .login-btn, [onClick*='login']");
+        if (loginBtn && gameState.currentUser) {
+          loginBtn.innerText = "ĐĂNG XUẤT";
         }
 
-        // TỰ ĐỘNG CẬP NHẬT TRẠNG THÁI NÚT ĐĂNG NHẬP / ĐĂNG XUẤT NẾU CÓ
-        if (typeof updateAuthUI === 'function') {
-          updateAuthUI();
-        } else if (typeof checkLoginState === 'function') {
-          checkLoginState();
-        }
+        // Gọi các hàm cập nhật UI Auth nếu web có sẵn
+        if (typeof updateAuthUI === 'function') updateAuthUI();
+        if (typeof checkAuth === 'function') checkAuth();
+        if (typeof updateUI === 'function') updateUI();
         
         setTimeout(() => { isRemoteChange = false; }, 500);
       }
@@ -3356,16 +3357,14 @@ function activatePotion(itemId) {
   // 2. TỰ ĐỘNG LẮNG NGHE HÀM saveData GỐC CỦA WEB ĐỂ GỬI LÊN FIREBASE
   const originalSaveData = window.saveData;
   window.saveData = function() {
-    // Chạy hàm saveData gốc của web (lưu LocalStorage)
     if (typeof originalSaveData === 'function') {
       originalSaveData();
     }
-    
-    // Đẩy toàn bộ gameState lên Firebase Firestore
     if (!isRemoteChange && typeof gameState !== 'undefined') {
       setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
     }
   };
+</script>
 </script>
 </script>
 </body>
