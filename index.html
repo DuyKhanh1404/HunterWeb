@@ -2237,7 +2237,7 @@ function logActivity(text) {
         const activeKey = typeof getActiveStorageKey === 'function' ? getActiveStorageKey() : (username ? accountKey(username) : GUEST_STORAGE_KEY);
         const resetState = cloneDefaultGameState();
 
-        // 1. Xóa dữ liệu cũ trong IndexedDB
+        // 1. Xóa dữ liệu cũ trong IndexedDB nếu có
         if (typeof idbDb !== 'undefined' && idbDb) {
             await idbDelete(IDB_STATE_STORE, activeKey).catch(() => {});
             if (isLoggedIn && username) await idbDelete(IDB_QUEUE_STORE, username).catch(() => {});
@@ -2252,12 +2252,12 @@ function logActivity(text) {
         normalizeGameState();
         checkCycleResets();
 
-        // 4. Đồng bộ Firebase Firestore (Xóa sạch lệnh gọi cloudPush cũ gây lỗi 405)
+        // 4. Đồng bộ Firebase Firestore (loại bỏ hoàn toàn cloudPush cũ)
         if (isLoggedIn && username) {
             localRevisionForFirebase = Date.now();
             remoteRevision = localRevisionForFirebase;
             
-            // Tạo cờ chờ Reset offline
+            // Đặt cờ xử lý khi offline
             localStorage.setItem('hunter_pending_reset_' + username, 'true');
             writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
             
