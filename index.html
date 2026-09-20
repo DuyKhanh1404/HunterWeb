@@ -2252,23 +2252,19 @@ function logActivity(text) {
         normalizeGameState();
         checkCycleResets();
 
-        // 4. Đồng bộ lên Firebase Firestore nếu đang đăng nhập
+        // 4. Cập nhật Revision và Đặt Cờ Pending Reset
         if (isLoggedIn && username) {
+            // Tăng revision lên giá trị thời gian để chắc chắn LỚN HƠN revision cũ trên Cloud
             localRevisionForFirebase = Date.now();
+            remoteRevision = localRevisionForFirebase;
+            
+            // Đánh dấu cờ cần đồng bộ Reset lên Cloud khi có mạng
+            localStorage.setItem('hunter_pending_reset_' + username, 'true');
             writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
             
-            // Đẩy dữ liệu reset lên Firestore nếu có mạng
             if (navigator.onLine && auth.currentUser) {
-                const ref = usernameDoc(username);
-                await setDoc(ref, {
-                    ownerUid: auth.currentUser.uid,
-                    state: gameState,
-                    revision: localRevisionForFirebase,
-                    updatedAt: serverTimestamp(),
-                    loggedIn: true,
-                    lastLogoutDeviceId: deviceId
-                }, { merge: true });
-                updateSyncUI("synced");
+                await syncCurrentAccountState(true);
+                localStorage.removeItem('hunter_pending_reset_' + username);
             } else {
                 updateSyncUI("offline");
             }
@@ -3506,33 +3502,43 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
         }
       }
 
-      currentUserDocUnsub = onSnapshot(ref, s => {
-        if(!s.exists() || applyingRemote) return;
-        const remote = s.data() || {};
-        if(remote.ownerUid !== auth.currentUser?.uid){
-          showToast('⚠ Quyền tài khoản không hợp lệ.', 'error');
-          return;
-        }
-        if(remote.loggedIn === false && remote.lastLogoutDeviceId !== deviceId){
-          signOut(auth).catch(() => {});
-          return;
-        }
-        if(remote.state && Number(remote.revision || 0) > localRevisionForFirebase){
-          applyingRemote = true;
-          gameState = cloneState(remote.state);
-          normalizeGameState();
-          checkCycleResets();
-          remoteRevision = Number(remote.revision || 0);
-          localRevisionForFirebase = remoteRevision;
-          writeLocalAccountSnapshot(username, gameState, remoteRevision);
-          renderAll();
-          updateSyncUI('synced');
-          applyingRemote = false;
-        }
-      }, err => {
-        console.error('Account listener', err);
-        updateSyncUI('offline');
-      });
+      currentUserDocUnsub = onSnapshot(ref, async (s) => {
+  if(!s.exists() || applyingRemote) return;
+  const remote = s.data() || {};
+  if(remote.ownerUid !== auth.currentUser?.uid){
+    showToast('⚠ Quyền tài khoản không hợp lệ.', 'error');
+    return;
+  }
+  if(remote.loggedIn === false && remote.lastLogoutDeviceId !== deviceId){
+    signOut(auth).catch(() => {});
+    return;
+  }
+
+  // 1. NẾU CÓ CỜ PENDING RESET -> ĐẨY BẢN RESET NÀY LÊN CLOUD NGAY LẬP TỨC
+  const pendingResetKey = 'hunter_pending_reset_' + username;
+  if (localStorage.getItem(pendingResetKey) === 'true') {
+    localStorage.removeItem(pendingResetKey);
+    await syncCurrentAccountState(true);
+    return;
+  }
+
+  // 2. CHỈ NHẬN DỮ LIỆU TỪ CLOUD NẾU REVISION TRÊN CLOUD THỰC SỰ LỚN HƠN
+  if(remote.state && Number(remote.revision || 0) > localRevisionForFirebase){
+    applyingRemote = true;
+    gameState = cloneState(remote.state);
+    normalizeGameState();
+    checkCycleResets();
+    remoteRevision = Number(remote.revision || 0);
+    localRevisionForFirebase = remoteRevision;
+    writeLocalAccountSnapshot(username, gameState, remoteRevision);
+    renderAll();
+    updateSyncUI('synced');
+    applyingRemote = false;
+  }
+}, err => {
+  console.error('Account listener', err);
+  updateSyncUI('offline');
+});
 
       updateAccountUI();
       renderAll();
