@@ -2223,56 +2223,62 @@ function logActivity(text) {
             } catch (e) { alert("JSON lỗi!"); }
         }
 
-        // RESET FIX: Reset phải đi qua đúng nguồn lưu trữ của tài khoản.
-        // Tuyệt đối không gọi REST/cloudRequest/cloudPush ở đây vì endpoint cũ có thể trả HTTP 405.
-        // Firebase Firestore được xử lý trong module bên dưới qua window.firebaseResetCurrentAccountState.
+        // RESET FIX: trước đây chỉ xóa localStorage, trong khi state thật đã chuyển sang IndexedDB.
+        // Vì vậy reload sẽ nạp lại dữ liệu cũ từ IndexedDB. Hàm mới xóa cả localStorage + IndexedDB + sync queue.
         async function resetEverythingPrompt() {
-            if (prompt("Nhập mật khẩu của bạn để Reset") !== "604041") {
-                showToast("Mật khẩu Reset không đúng.", "error");
-                return;
-            }
-            if (!confirm("RESET TOÀN BỘ tiến trình hiện tại? Hành động này sẽ xóa dữ liệu local và đồng bộ trạng thái ban đầu lên Firebase.")) return;
+    if (prompt("Nhập mật khẩu của bạn để Reset") !== "604041") {
+        showToast("Mật khẩu Reset không đúng.", "error");
+        return;
+    }
+    if (!confirm("RESET TOÀN BỘ tiến trình hiện tại? Hành động này sẽ xóa dữ liệu local và đồng bộ trạng thái ban đầu lên Firebase.")) return;
 
-            try {
-                const username = loggedInUsername || null;
-                const activeKey = typeof getActiveStorageKey === 'function'
-                    ? getActiveStorageKey()
-                    : (username ? ACCOUNT_STORAGE_PREFIX + String(username).toLowerCase() : GUEST_STORAGE_KEY);
-                const resetState = cloneDefaultGameState();
+    try {
+        const username = loggedInUsername || (typeof ACCOUNT_USERNAME !== 'undefined' ? ACCOUNT_USERNAME : null);
+        const activeKey = typeof getActiveStorageKey === 'function' ? getActiveStorageKey() : (username ? accountKey(username) : GUEST_STORAGE_KEY);
+        const resetState = cloneDefaultGameState();
 
-                // 1. Xóa snapshot/queue cũ trong IndexedDB.
-                if (idbDb) {
-                    await idbDelete(IDB_STATE_STORE, activeKey).catch(() => {});
-                    if (isLoggedIn && username) await idbDelete(IDB_QUEUE_STORE, String(username).toLowerCase()).catch(() => {});
-                }
-
-                // 2. Xóa các bản lưu legacy trong LocalStorage.
-                if (typeof STORAGE_KEY !== 'undefined') localStorage.removeItem(STORAGE_KEY);
-                localStorage.removeItem(activeKey);
-
-                // 3. Đưa state hiện tại về mặc định.
-                gameState = resetState;
-                normalizeGameState();
-                checkCycleResets();
-
-                // 4. Tài khoản Firebase: dùng transaction Firestore trực tiếp,
-                // không đi qua REST endpoint nên HTTP 405 của Cloud không còn ảnh hưởng Reset.
-                if (isLoggedIn && username && window.firebaseResetCurrentAccountState) {
-                    await window.firebaseResetCurrentAccountState(gameState);
-                } else {
-                    // Guest/offline: persistLocalFirst sẽ lưu lại state mặc định vào IndexedDB.
-                    saveData("reset");
-                    updateSyncUI(isLoggedIn ? "offline" : "saved");
-                }
-
-                renderAll();
-                updateAccountUI();
-                showToast("♻️ Đã Reset toàn bộ tiến trình hiện tại.", "success");
-            } catch(e) {
-                console.error("Reset error:", e);
-                showToast("⚠️ Reset gặp lỗi: " + (e?.message || e), "error");
-            }
+        // 1. Xóa dữ liệu cũ trong IndexedDB nếu có
+        if (typeof idbDb !== 'undefined' && idbDb) {
+            await idbDelete(IDB_STATE_STORE, activeKey).catch(() => {});
+            if (isLoggedIn && username) await idbDelete(IDB_QUEUE_STORE, username).catch(() => {});
         }
+
+        // 2. Xóa dữ liệu đệm trong LocalStorage
+        if (typeof STORAGE_KEY !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(activeKey);
+
+        // 3. Đưa gameState về ban đầu
+        gameState = resetState;
+        normalizeGameState();
+        checkCycleResets();
+
+        // 4. Tài khoản Firebase: reset trực tiếp document Firestore.
+        // Không gọi auth/syncCurrentAccountState ở script thường vì chúng nằm trong ES module.
+        if (isLoggedIn && username) {
+            localStorage.setItem('hunter_pending_reset_' + username, 'true');
+            writeLocalAccountSnapshot(username, gameState, Date.now());
+
+            if (typeof window.firebaseResetCurrentAccountState === 'function') {
+                await window.firebaseResetCurrentAccountState(username, gameState);
+                localStorage.removeItem('hunter_pending_reset_' + username);
+                updateSyncUI('synced');
+            } else {
+                updateSyncUI(navigator.onLine ? 'error' : 'offline');
+                throw new Error('Firebase module chưa sẵn sàng. Vui lòng thử lại sau khi trang tải xong.');
+            }
+        } else {
+            saveData("reset");
+            updateSyncUI("saved");
+        }
+
+        renderAll();
+        updateAccountUI();
+        showToast("♻️ Đã Reset toàn bộ tiến trình hiện tại.", "success");
+    } catch(e) {
+        console.error("Reset error:", e);
+        showToast("⚠️ Reset gặp lỗi: " + e.message, "error");
+    }
+}
 function getRankRewardSummary(rankLetter) {
     return (RANK_CORE_REWARDS[rankLetter] || []).map(r => {
         const item = SHOP_ITEMS.find(x => x.id === r.id);
@@ -3339,60 +3345,6 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
     });
     return result;
   }
-  // Reset riêng cho Firebase. Hàm được expose lên window vì resetEverythingPrompt()
-  // nằm trong script thường, còn Firebase nằm trong ES module scope.
-  window.firebaseResetCurrentAccountState = async function(resetState){
-    const user = auth.currentUser;
-    const username = loggedInUsername;
-    if(!user || !username) throw new Error('Chưa đăng nhập Firebase.');
-
-    const ref = usernameDoc(username);
-    const uid = user.uid;
-    const snapshot = cloneState(resetState || cloneDefaultGameState());
-
-    // Lưu local trước để Reset vẫn an toàn nếu mạng chập chờn.
-    localRevisionForFirebase = Date.now();
-    remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
-    writeLocalAccountSnapshot(username, snapshot, localRevisionForFirebase);
-
-    try {
-      const result = await runTransaction(db, async tx => {
-        const snap = await tx.get(ref);
-        if(!snap.exists()) throw new Error('Không tìm thấy hồ sơ tài khoản.');
-        const old = snap.data() || {};
-        if(old.ownerUid !== uid) throw new Error('Không có quyền với tài khoản này.');
-
-        const nextRevision = Math.max(
-          Number(old.revision || 0) + 1,
-          Date.now()
-        );
-        tx.set(ref, {
-          username,
-          normalizedUsername: normalizeUsername(username),
-          ownerUid: uid,
-          revision: nextRevision,
-          updatedAt: serverTimestamp(),
-          updatedByDevice: deviceId,
-          loggedIn: true,
-          state: snapshot
-        }, {merge:true});
-        return nextRevision;
-      });
-
-      localRevisionForFirebase = Number(result);
-      remoteRevision = localRevisionForFirebase;
-      writeLocalAccountSnapshot(username, snapshot, localRevisionForFirebase);
-      if(idbDb) await idbDelete(IDB_QUEUE_STORE, username).catch(()=>{});
-      localStorage.removeItem('hunter_pending_reset_' + username);
-      updateSyncUI('synced');
-    } catch(e) {
-      // Không rollback state: Reset local vẫn hợp lệ và syncCurrentAccountState()
-      // sẽ đẩy state mặc định lên Firestore khi có mạng trở lại.
-      updateSyncUI('offline');
-      throw e;
-    }
-  };
-
   async function syncCurrentAccountState(force=false){
     if(!auth.currentUser||!loggedInUsername||applyingRemote)return;
     const username=loggedInUsername, ref=usernameDoc(username), uid=auth.currentUser.uid;
@@ -3485,6 +3437,44 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
     const user=auth.currentUser; if(!user||!loggedInUsername)throw new Error('Chưa đăng nhập Firebase.');
     try{const credential=EmailAuthProvider.credential(user.email,currentPassword); await reauthenticateWithCredential(user,credential); await updatePassword(user,newPassword);}catch(e){throw friendlyAuthError(e);}
   };
+  // RESET ACCOUNT: cầu nối từ script ứng dụng sang ES module Firebase.
+  // Reset phải ghi thẳng state mặc định vào đúng document users/{username},
+  // không đi qua REST Cloud cũ nên không thể phát sinh HTTP 405.
+  window.firebaseResetCurrentAccountState=async function(username,state){
+    const user=auth.currentUser;
+    const canonical=normalizeUsername(username);
+    if(!user||!canonical) throw new Error('Phiên đăng nhập Firebase chưa sẵn sàng.');
+
+    const ref=usernameDoc(canonical);
+    const resetSnapshot=cloneState(state);
+    const result=await runTransaction(db,async tx=>{
+      const snap=await tx.get(ref);
+      if(!snap.exists()) throw new Error('Không tìm thấy hồ sơ tài khoản.');
+      const old=snap.data()||{};
+      if(old.ownerUid!==user.uid) throw new Error('Không có quyền với tài khoản này.');
+      const nextRevision=Math.max(Number(old.revision||0)+1,Date.now());
+      tx.set(ref,{
+        username:canonical,
+        normalizedUsername:canonical,
+        ownerUid:user.uid,
+        revision:nextRevision,
+        updatedAt:serverTimestamp(),
+        updatedByDevice:deviceId,
+        loggedIn:true,
+        state:resetSnapshot
+      },{merge:true});
+      return nextRevision;
+    });
+
+    localRevisionForFirebase=Number(result);
+    remoteRevision=Math.max(remoteRevision,localRevisionForFirebase);
+    writeLocalAccountSnapshot(canonical,resetSnapshot,localRevisionForFirebase);
+    gameState=cloneState(resetSnapshot);
+    normalizeGameState();
+    renderAll();
+    updateAccountUI();
+  };
+
   window.firebaseSignOut=async function(){clearTimeout(pendingStateTimer); if(auth.currentUser&&loggedInUsername){try{const ref=usernameDoc(loggedInUsername),uid=auth.currentUser.uid;await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(snap.exists()&&snap.data().ownerUid===uid)tx.set(ref,{loggedIn:false,lastLogoutAt:serverTimestamp(),lastLogoutDeviceId:deviceId},{merge:true});});}catch(e){console.warn('Logout marker:',e);}} await signOut(auth);};
 
  onAuthStateChanged(auth, async user => {
