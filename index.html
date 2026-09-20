@@ -3324,44 +3324,53 @@ function activatePotion(itemId) {
 
   let isRemoteChange = false;
 
-  // 1. NHẬN DỮ LIỆU TỪ FIREBASE VỀ (Đồng bộ Realtime)
+  // 1. NHẬN DỮ LIỆU TỪ FIREBASE TỰ ĐỘNG (REALTIME)
   onSnapshot(userDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const remoteData = docSnap.data();
       if (typeof gameState !== 'undefined') {
         isRemoteChange = true;
         
-        // Ghi đè dữ liệu mới nhận vào gameState
+        // Cập nhật dữ liệu mới vào gameState
         Object.assign(gameState, remoteData);
         
-        // Cập nhật lại toàn bộ giao diện web
+        // Cập nhật giao diện game
         if (typeof renderAll === 'function') renderAll();
         if (typeof render === 'function') render();
 
-        // ÉP CẬP NHẬT GIAO DIỆN NÚT ĐĂNG NHẬP / ĐĂNG XUẤT
-        const loginBtn = document.querySelector("#loginBtn, #authBtn, .login-btn, [onClick*='login']");
-        if (loginBtn && gameState.currentUser) {
-          loginBtn.innerText = "ĐĂNG XUẤT";
+        // CẬP NHẬT TRẠNG THÁI HIỂN THỊ NÚT ĐĂNG NHẬP / ĐĂNG XUẤT
+        const isLogged = Boolean(gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged));
+        const authBtn = document.querySelector("#loginBtn, #authBtn, .login-btn") || 
+                        Array.from(document.querySelectorAll('button, a')).find(el => el.textContent.includes('ĐĂNG NHẬP') || el.textContent.includes('THOÁT'));
+        
+        if (authBtn) {
+          if (isLogged) {
+            const userName = gameState.currentUser || 'DuyKhanh';
+            authBtn.innerHTML = `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${userName} • THOÁT</span>`;
+          } else {
+            authBtn.innerHTML = `<span class="flex items-center gap-1.5">ĐĂNG NHẬP</span>`;
+          }
         }
 
-        // Gọi các hàm cập nhật UI Auth nếu web có sẵn
-        if (typeof updateAuthUI === 'function') updateAuthUI();
-        if (typeof checkAuth === 'function') checkAuth();
-        if (typeof updateUI === 'function') updateUI();
-        
         setTimeout(() => { isRemoteChange = false; }, 500);
       }
     }
+  }, (error) => {
+    console.error("Lỗi kết nối Firebase Realtime:", error);
   });
 
-  // 2. TỰ ĐỘNG LẮNG NGHE HÀM saveData GỐC CỦA WEB ĐỂ GỬI LÊN FIREBASE
+  // 2. GỬI DỮ LIỆU LÊN FIREBASE KHI CÓ THAY ĐỔI
   const originalSaveData = window.saveData;
   window.saveData = function() {
     if (typeof originalSaveData === 'function') {
-      originalSaveData();
+      try { originalSaveData(); } catch (e) { console.error("Lỗi saveData gốc:", e); }
     }
-    if (!isRemoteChange && typeof gameState !== 'undefined') {
-      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
+    
+    // Chỉ đẩy lên Firebase khi đang ở trạng thái đăng nhập
+    const isLogged = Boolean(typeof gameState !== 'undefined' && (gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged)));
+
+    if (!isRemoteChange && isLogged) {
+      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đẩy dữ liệu Firebase:", err));
     }
   };
 </script>
