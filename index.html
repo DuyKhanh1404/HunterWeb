@@ -2226,37 +2226,65 @@ function logActivity(text) {
         // RESET FIX: trước đây chỉ xóa localStorage, trong khi state thật đã chuyển sang IndexedDB.
         // Vì vậy reload sẽ nạp lại dữ liệu cũ từ IndexedDB. Hàm mới xóa cả localStorage + IndexedDB + sync queue.
         async function resetEverythingPrompt() {
-            if (prompt("Nhập mật khẩu của bạn để Reset") !== "604041") {
-                showToast("Mật khẩu Reset không đúng.", "error");
-                return;
-            }
-            if (!confirm("RESET TOÀN BỘ tiến trình hiện tại? Hành động này sẽ xóa dữ liệu local và, nếu đang đăng nhập DuyKhanh + có Cloud, gửi trạng thái trắng lên Cloud.")) return;
+    if (prompt("Nhập mật khẩu của bạn để Reset") !== "604041") {
+        showToast("Mật khẩu Reset không đúng.", "error");
+        return;
+    }
+    if (!confirm("RESET TOÀN BỘ tiến trình hiện tại? Hành động này sẽ xóa dữ liệu local và đồng bộ trạng thái ban đầu lên Firebase.")) return;
 
-            try {
-                const activeKey=getActiveStorageKey();
-                const resetState=cloneDefaultGameState();
-                if (idbDb) {
-                    await idbDelete(IDB_STATE_STORE, activeKey).catch(()=>{});
-                    if (isLoggedIn) await idbDelete(IDB_QUEUE_STORE, ACCOUNT_USERNAME).catch(()=>{});
-                }
-                localStorage.removeItem(STORAGE_KEY);
-                localStorage.removeItem(activeKey);
-                if (isLoggedIn && cloudConfig.endpoint && navigator.onLine) {
-                    const rev=Math.max(Date.now(), localRevision+1), updatedAt=Date.now();
-                    await cloudPush({username:ACCOUNT_USERNAME,state:resetState,revision:rev,updatedAt});
-                }
-                gameState=resetState;
-                normalizeGameState();
-                checkCycleResets();
-                renderAll();
-                saveData("reset");
-                updateSyncUI(isLoggedIn && cloudConfig.endpoint && navigator.onLine ? "synced" : "saved");
-                showToast("♻️ Đã Reset toàn bộ tiến trình hiện tại.", "success");
-            } catch(e) {
-                console.error("Reset error:",e);
-                showToast("⚠️ Reset gặp lỗi: "+e.message, "error");
-            }
+    try {
+        const username = loggedInUsername || (typeof ACCOUNT_USERNAME !== 'undefined' ? ACCOUNT_USERNAME : null);
+        const activeKey = typeof getActiveStorageKey === 'function' ? getActiveStorageKey() : (username ? accountKey(username) : GUEST_STORAGE_KEY);
+        const resetState = cloneDefaultGameState();
+
+        // 1. Xóa dữ liệu cũ trong IndexedDB nếu có
+        if (typeof idbDb !== 'undefined' && idbDb) {
+            await idbDelete(IDB_STATE_STORE, activeKey).catch(() => {});
+            if (isLoggedIn && username) await idbDelete(IDB_QUEUE_STORE, username).catch(() => {});
         }
+
+        // 2. Xóa dữ liệu đệm trong LocalStorage
+        if (typeof STORAGE_KEY !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(activeKey);
+
+        // 3. Cập nhật state game hiện tại về mặc định
+        gameState = resetState;
+        normalizeGameState();
+        checkCycleResets();
+
+        // 4. Đồng bộ lên Firebase Firestore nếu đang đăng nhập
+        if (isLoggedIn && username) {
+            localRevisionForFirebase = Date.now();
+            writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
+            
+            // Đẩy dữ liệu reset lên Firestore nếu có mạng
+            if (navigator.onLine && auth.currentUser) {
+                const ref = usernameDoc(username);
+                await setDoc(ref, {
+                    ownerUid: auth.currentUser.uid,
+                    state: gameState,
+                    revision: localRevisionForFirebase,
+                    updatedAt: serverTimestamp(),
+                    loggedIn: true,
+                    lastLogoutDeviceId: deviceId
+                }, { merge: true });
+                updateSyncUI("synced");
+            } else {
+                updateSyncUI("offline");
+            }
+        } else {
+            saveData("reset");
+            updateSyncUI("saved");
+        }
+
+        renderAll();
+        updateAccountUI();
+        showToast("♻️ Đã Reset toàn bộ tiến trình hiện tại.", "success");
+    } catch(e) {
+        console.error("Reset error:", e);
+        showToast("⚠️ Reset gặp lỗi: " + e.message, "error");
+    }
+}
 function getRankRewardSummary(rankLetter) {
     return (RANK_CORE_REWARDS[rankLetter] || []).map(r => {
         const item = SHOP_ITEMS.find(x => x.id === r.id);
