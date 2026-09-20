@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-title" content="Hunter Language System">
     <meta name="format-detection" content="telephone=no">
     <link rel="manifest" href='data:application/manifest+json,{"name":"Hunter Language System","short_name":"Hunter","start_url":".","display":"standalone","background_color":"%2305060b","theme_color":"%2305060b","orientation":"portrait"}'>
+    <!-- Offline-first: Service Worker sẽ cache app shell và các thư viện cần thiết sau lần mở online đầu tiên. -->
     <title>RESET-FIX-V2 | Hunter Language System - Ultimate Transcendence Edition</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1354,20 +1355,17 @@
     if(!res.ok)throw new Error('Cloud HTTP '+res.status);
     return res.status===204?null:await res.json();
 }
-        // CLOUD SYNC: POST/PUT dùng cùng một snapshot contract để tương thích Worker/Supabase/REST API.
         async function cloudPush(payload){
-            if(window.__hunterResetInProgress) return null;
-            const preferred=cloudConfig.method||CLOUD_DEFAULT_METHOD;
-            try { return await cloudRequest(preferred,payload); }
-            catch(e) {
-                if ((e.message||'').includes('HTTP 405') || (e.message||'').includes('HTTP 404')) {
-                    const fallback=preferred==='PUT'?'POST':'PUT';
-                    return await cloudRequest(fallback,payload);
-                }
-                throw e;
-            }
-        }
-
+    if (window.__hunterResetInProgress) return null;
+    try {
+        const preferred = cloudConfig.method || CLOUD_DEFAULT_METHOD;
+        return await cloudRequest(preferred, payload);
+    } catch(e) {
+        console.warn("Cloud push failed, skipping cloud sync:", e);
+        // Trả về null để web tiếp tục chạy và Reset thành công ở Local mà không bị văng lỗi 405
+        return null; 
+    }
+}
         async function syncNow(manual=false){
             if(window.__hunterResetInProgress) return;
             // Firebase Authentication + Firestore là sync chính cho tài khoản mới.
@@ -1399,9 +1397,13 @@
             finally{syncInProgress=false;}
         }
         function installOnlineSync(){
-            window.addEventListener('online',()=>{updateSyncUI('ready');syncNow(false);});
+            window.addEventListener('online',()=>{
+                updateSyncUI('ready');
+                if(typeof window.__hunterFirebaseFlushOffline==='function') window.__hunterFirebaseFlushOffline();
+                else syncNow(false);
+            });
             window.addEventListener('offline',()=>updateSyncUI('offline'));
-            if(navigator.serviceWorker)navigator.serviceWorker.register('./hunter-service-worker.js').catch(()=>{});
+            if(navigator.serviceWorker)navigator.serviceWorker.register('./sw.js').catch(()=>{});
             clearInterval(syncTimer);syncTimer=setInterval(()=>{if(navigator.onLine&&isLoggedIn)syncNow(false);},30000);
         }
 
@@ -3179,7 +3181,7 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
             if(!('serviceWorker' in navigator)) return;
             // Nếu triển khai cùng file hunter-service-worker.js, đăng ký SW để có offline navigation thật.
             try{
-                const swUrl=new URL('./hunter-service-worker.js',location.href);
+                const swUrl=new URL('./sw.js',location.href);
                 if(/^https?:$/i.test(swUrl.protocol)) await navigator.serviceWorker.register(swUrl.href,{scope:'./'});
             }catch(e){ console.debug('Service Worker chưa khả dụng ở single-file/file://:',e); }
         }
@@ -3325,13 +3327,15 @@ function activatePotion(itemId) {
      ================================================================ */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, updatePassword, updateProfile, signOut, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig={apiKey:"AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",authDomain:"hunter-lans.firebaseapp.com",projectId:"hunter-lans",storageBucket:"hunter-lans.firebasestorage.app",messagingSenderId:"167057896841",appId:"1:167057896841:web:a4da206f71141250505d58"};
   import { enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"; // Bổ sung import này ở đầu file
 
-const app=initializeApp(firebaseConfig); const auth=getAuth(app); const db=getFirestore(app);
-enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dưới
+const app=initializeApp(firebaseConfig);
+   const auth=getAuth(app);
+   const db=getFirestore(app);
+   enableIndexedDbPersistence(db).catch(err=>console.warn('Firestore offline persistence:', err.code || err));
   const DEVICE_ID_KEY='hunter_language_system_device_id_v2';
   const deviceId=(()=>{let id=localStorage.getItem(DEVICE_ID_KEY); if(!id){id=crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);localStorage.setItem(DEVICE_ID_KEY,id);}return id;})();
   let firebaseReady=false, applyingRemote=false, pendingStateTimer=null, remoteRevision=0, localRevisionForFirebase=0, currentUserDocUnsub=null;
@@ -3364,64 +3368,54 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
     return result;
   }
   async function syncCurrentAccountState(force=false){
-    if(!auth.currentUser||!loggedInUsername||applyingRemote)return;
-    const username=loggedInUsername, ref=usernameDoc(username), uid=auth.currentUser.uid;
+     if(!auth.currentUser||!loggedInUsername||applyingRemote)return;
+     const username=loggedInUsername, ref=usernameDoc(username), uid=auth.currentUser.uid;
 
-    // 1. Luôn ghi nhận vào bộ nhớ local trước để khi mất Wi-Fi vẫn giữ tiến trình
-    localRevisionForFirebase += 1;
-    writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
-    updateSyncUI('synced');
+     // LOCAL-FIRST: luôn lưu snapshot trước. Không phụ thuộc Wi-Fi.
+     localRevisionForFirebase += 1;
+     writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
 
-    // 2. Đồng bộ lên Firebase Cloud
-    try {
-      const result = await runTransaction(db, async tx => {
-        const snap = await tx.get(ref);
-        if(!snap.exists()) throw new Error('Không tìm thấy hồ sơ tài khoản.');
-        const old = snap.data();
-        if(old.ownerUid !== uid) throw new Error('Không có quyền với tài khoản này.');
-        const next = Number(old.revision || 0) + 1;
-        tx.set(ref, {
-          revision: next,
-          updatedAt: serverTimestamp(),
-          updatedByDevice: deviceId,
-          loggedIn: true,
-          state: cloneState(gameState)
-        }, {merge: true});
-        return next;
-      });
-      localRevisionForFirebase = Number(result);
-      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
-      writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
-    } catch(e) {
-      console.warn('Firebase state sync (offline/queued):', e);
-      updateSyncUI('offline');
-      if(force) showToast('⚠ Không thể đồng bộ trực tiếp (Đang lưu offline): ' + e.message, 'warning');
-    }
-  }
+     if(!navigator.onLine){
+       updateSyncUI('offline');
+       if(force) showToast('📡 Offline: dữ liệu đã được lưu trên thiết bị.', 'success');
+       return;
+     }
 
-  function scheduleFirebaseStateSync(){if(window.__hunterResetInProgress)return;if(!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;clearTimeout(pendingStateTimer);pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);}
+     updateSyncUI('syncing');
+     try {
+       const result = await runTransaction(db, async tx => {
+         const snap = await tx.get(ref);
+         if(!snap.exists()) throw new Error('Không tìm thấy hồ sơ tài khoản.');
+         const old = snap.data();
+         if(old.ownerUid !== uid) throw new Error('Không có quyền với tài khoản này.');
+         const next = Math.max(Number(old.revision || 0) + 1, localRevisionForFirebase);
+         tx.set(ref, {
+           revision: next,
+           updatedAt: serverTimestamp(),
+           updatedByDevice: deviceId,
+           loggedIn: true,
+           state: cloneState(gameState)
+         }, {merge:true});
+         return next;
+       });
+       localRevisionForFirebase = Number(result);
+       remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
+       writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
+       updateSyncUI('synced');
+     } catch(e) {
+       console.warn('Firebase state sync (offline/queued):', e);
+       updateSyncUI(navigator.onLine ? 'error' : 'offline');
+       if(force) showToast('⚠ Chưa đồng bộ Cloud; dữ liệu vẫn được lưu offline.', 'warning');
+     }
+   }function scheduleFirebaseStateSync(){
+     if(window.__hunterResetInProgress||!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;
+     clearTimeout(pendingStateTimer);
+     pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);
+   }
 
-  window.firebaseSignIn=async function(username,password){
-    try{
-      saveDataForKey(GUEST_STORAGE_KEY); localStorage.setItem('hunter_language_system_logged_in',username);
+   
 
-      const cred=await signInWithEmailAndPassword(auth,usernameEmail(username),password);
-      const canonical=normalizeUsername(username);
-      if(!cred.user.displayName){try{await updateProfile(cred.user,{displayName:canonical});}catch(_){} }
-      const profile=await loadAccountState(canonical);
-      if(profile.data?.username&&profile.data.ownerUid!==cred.user.uid)throw new Error('Tên tài khoản không khớp.');
-      let state=profile.state; if(!state){state=cloneDefaultGameState();}
-      loggedInUsername=canonical; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',canonical); gameState=cloneState(state);normalizeGameState();checkCycleResets();
-      const ensured=await ensureAccountDoc(canonical,gameState);
-      if(ensured.state){gameState=cloneState(ensured.state);normalizeGameState();checkCycleResets();}
-      writeLocalAccountSnapshot(canonical,gameState,ensured.revision); renderAll();updateAccountUI();
-      await syncCurrentAccountState(true);
-    }catch(e){throw friendlyAuthError(e);}
-  };
-
-  function scheduleFirebaseStateSync(){if(!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;clearTimeout(pendingStateTimer);pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);}
-
-  window.firebaseSignIn=async function(username,password){
+   window.firebaseSignIn=async function(username,password){
     try{
       saveDataForKey(GUEST_STORAGE_KEY); localStorage.setItem('hunter_language_system_logged_in',username);
 
@@ -3594,6 +3588,11 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
   });
 
   const originalSaveData=window.saveData; window.saveData=function(reason='change'){if(typeof originalSaveData==='function')originalSaveData(reason);scheduleFirebaseStateSync();};
+  window.__hunterFirebaseFlushOffline=async function(){
+    if(!auth.currentUser||!loggedInUsername)return;
+    clearTimeout(pendingStateTimer);
+    await syncCurrentAccountState(true);
+  };
   firebaseReady=true;
   // Đăng ký bộ nhớ đệm Offline cho toàn bộ Web
   if ('serviceWorker' in navigator) {
