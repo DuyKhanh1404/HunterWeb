@@ -3323,16 +3323,62 @@ enableIndexedDbPersistence(db).catch(()=>{}); // Chèn dòng này ngay bên dư�
     });
     return result;
   }
-  async function applyRemoteAccount(username,remote){
-    applyingRemote=true; loggedInUsername=username; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',username);
-    if(remote?.state){gameState=cloneState(remote.state);normalizeGameState();checkCycleResets();writeLocalAccountSnapshot(username,gameState,Number(remote.revision||0));}
-    remoteRevision=Number(remote?.revision||0); localRevisionForFirebase=remoteRevision; updateAccountUI(); renderAll(); updateSyncUI('synced'); applyingRemote=false;
-  }
   async function syncCurrentAccountState(force=false){
     if(!auth.currentUser||!loggedInUsername||applyingRemote)return;
     const username=loggedInUsername, ref=usernameDoc(username), uid=auth.currentUser.uid;
-    try{const result=await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw new Error('Không tìm thấy hồ sơ tài khoản.');const old=snap.data();if(old.ownerUid!==uid)throw new Error('Không có quyền với tài khoản này.');const next=Number(old.revision||0)+1;tx.set(ref,{revision:next,updatedAt:serverTimestamp(),updatedByDevice:deviceId,loggedIn:true,state:cloneState(gameState)},{merge:true});return next;});localRevisionForFirebase=Number(result);remoteRevision=Math.max(remoteRevision,localRevisionForFirebase);writeLocalAccountSnapshot(username,gameState,localRevisionForFirebase);updateSyncUI('synced');}catch(e){console.error('Firebase state sync',e);updateSyncUI('error');if(force)showToast('⚠ Không thể đồng bộ dữ liệu: '+e.message,'error');}
+
+    // 1. Luôn ghi nhận vào bộ nhớ local trước để khi mất Wi-Fi vẫn giữ tiến trình
+    localRevisionForFirebase += 1;
+    writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
+    updateSyncUI('synced');
+
+    // 2. Đồng bộ lên Firebase Cloud
+    try {
+      const result = await runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if(!snap.exists()) throw new Error('Không tìm thấy hồ sơ tài khoản.');
+        const old = snap.data();
+        if(old.ownerUid !== uid) throw new Error('Không có quyền với tài khoản này.');
+        const next = Number(old.revision || 0) + 1;
+        tx.set(ref, {
+          revision: next,
+          updatedAt: serverTimestamp(),
+          updatedByDevice: deviceId,
+          loggedIn: true,
+          state: cloneState(gameState)
+        }, {merge: true});
+        return next;
+      });
+      localRevisionForFirebase = Number(result);
+      remoteRevision = Math.max(remoteRevision, localRevisionForFirebase);
+      writeLocalAccountSnapshot(username, gameState, localRevisionForFirebase);
+    } catch(e) {
+      console.warn('Firebase state sync (offline/queued):', e);
+      updateSyncUI('offline');
+      if(force) showToast('⚠ Không thể đồng bộ trực tiếp (Đang lưu offline): ' + e.message, 'warning');
+    }
   }
+
+  function scheduleFirebaseStateSync(){if(!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;clearTimeout(pendingStateTimer);pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);}
+
+  window.firebaseSignIn=async function(username,password){
+    try{
+      saveDataForKey(GUEST_STORAGE_KEY); localStorage.setItem('hunter_language_system_logged_in',username);
+
+      const cred=await signInWithEmailAndPassword(auth,usernameEmail(username),password);
+      const canonical=normalizeUsername(username);
+      if(!cred.user.displayName){try{await updateProfile(cred.user,{displayName:canonical});}catch(_){} }
+      const profile=await loadAccountState(canonical);
+      if(profile.data?.username&&profile.data.ownerUid!==cred.user.uid)throw new Error('Tên tài khoản không khớp.');
+      let state=profile.state; if(!state){state=cloneDefaultGameState();}
+      loggedInUsername=canonical; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',canonical); gameState=cloneState(state);normalizeGameState();checkCycleResets();
+      const ensured=await ensureAccountDoc(canonical,gameState);
+      if(ensured.state){gameState=cloneState(ensured.state);normalizeGameState();checkCycleResets();}
+      writeLocalAccountSnapshot(canonical,gameState,ensured.revision); renderAll();updateAccountUI();
+      await syncCurrentAccountState(true);
+    }catch(e){throw friendlyAuthError(e);}
+  };
+
   function scheduleFirebaseStateSync(){if(!firebaseReady||!auth.currentUser||!isLoggedIn||applyingRemote)return;clearTimeout(pendingStateTimer);pendingStateTimer=setTimeout(()=>syncCurrentAccountState(false),400);}
 
   window.firebaseSignIn=async function(username,password){
