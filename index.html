@@ -3324,53 +3324,30 @@ function activatePotion(itemId) {
 
   let isRemoteChange = false;
 
-  // 1. NHẬN DỮ LIỆU TỪ FIREBASE TỰ ĐỘNG (REALTIME)
+  // 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE REALTIME VỀ MÁY
   onSnapshot(userDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const remoteData = docSnap.data();
       if (typeof gameState !== 'undefined') {
         isRemoteChange = true;
-        
-        // Cập nhật dữ liệu mới vào gameState
         Object.assign(gameState, remoteData);
         
-        // Cập nhật giao diện game
         if (typeof renderAll === 'function') renderAll();
         if (typeof render === 'function') render();
-
-        // CẬP NHẬT TRẠNG THÁI HIỂN THỊ NÚT ĐĂNG NHẬP / ĐĂNG XUẤT
-        const isLogged = Boolean(gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged));
-        const authBtn = document.querySelector("#loginBtn, #authBtn, .login-btn") || 
-                        Array.from(document.querySelectorAll('button, a')).find(el => el.textContent.includes('ĐĂNG NHẬP') || el.textContent.includes('THOÁT'));
         
-        if (authBtn) {
-          if (isLogged) {
-            const userName = gameState.currentUser || 'DuyKhanh';
-            authBtn.innerHTML = `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ${userName} • THOÁT</span>`;
-          } else {
-            authBtn.innerHTML = `<span class="flex items-center gap-1.5">ĐĂNG NHẬP</span>`;
-          }
-        }
-
         setTimeout(() => { isRemoteChange = false; }, 500);
       }
     }
-  }, (error) => {
-    console.error("Lỗi kết nối Firebase Realtime:", error);
   });
 
-  // 2. GỬI DỮ LIỆU LÊN FIREBASE KHI CÓ THAY ĐỔI
+  // 2. TỰ ĐỘNG LẮNG NGHE HÀM saveData GỐC CỦA WEB ĐỂ GỬI LÊN FIREBASE
   const originalSaveData = window.saveData;
   window.saveData = function() {
     if (typeof originalSaveData === 'function') {
-      try { originalSaveData(); } catch (e) { console.error("Lỗi saveData gốc:", e); }
+      originalSaveData();
     }
-    
-    // Chỉ đẩy lên Firebase khi đang ở trạng thái đăng nhập
-    const isLogged = Boolean(typeof gameState !== 'undefined' && (gameState.currentUser || gameState.isLoggedIn || (gameState.user && gameState.user.isLogged)));
-
-    if (!isRemoteChange && isLogged) {
-      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đẩy dữ liệu Firebase:", err));
+    if (!isRemoteChange && typeof gameState !== 'undefined') {
+      setDoc(userDocRef, gameState, { merge: true }).catch(err => console.error("Lỗi đồng bộ Firebase:", err));
     }
   };
 </script>
