@@ -3340,6 +3340,13 @@ function activatePotion(itemId) {
         } else if (typeof render === 'function') {
           render();
         }
+
+        // TỰ ĐỘNG CẬP NHẬT TRẠNG THÁI NÚT ĐĂNG NHẬP / ĐĂNG XUẤT NẾU CÓ
+        if (typeof updateAuthUI === 'function') {
+          updateAuthUI();
+        } else if (typeof checkLoginState === 'function') {
+          checkLoginState();
+        }
         
         setTimeout(() => { isRemoteChange = false; }, 500);
       }
