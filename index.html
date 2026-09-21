@@ -224,6 +224,32 @@
         }
     </style>
 </head>
+<div id="usage-counter" style="font-size: 14px; opacity: 0.8; margin-top: 10px;">
+  Đã sử dụng: Đang tính toán...
+</div><script>
+  // Kiểm tra xem đã có mốc thời gian bắt đầu trong trình duyệt chưa
+  let startDate = localStorage.getItem('hunter_start_date');
+  
+  if (!startDate) {
+    // Nếu chưa có (lần đầu tiên mở web), lưu lại thời điểm hiện tại (tính bằng mili-giây)
+    startDate = new Date().getTime();
+    localStorage.setItem('hunter_start_date', startDate);
+  }
+
+  // Tính khoảng thời gian từ ngày bắt đầu đến hiện tại
+  const now = new Date().getTime();
+  const diffTime = now - parseInt(startDate);
+  
+  // Chuyển đổi từ mili-giây sang số ngày (1 ngày = 24 * 60 * 60 * 1000 ms)
+  // Cộng thêm 1 để ngày đầu tiên mở web sẽ tính là ngày 1
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  // Hiển thị kết quả ra thẻ HTML ở trên
+  const counterElement = document.getElementById('usage-counter');
+  if (counterElement) {
+    counterElement.innerText = `Đã sử dụng: ${diffDays} ngày`;
+  }
+</script>
 <body class="min-h-screen bg-hunter-bg text-slate-100 flex flex-col selection:bg-purple-600 selection:text-white">
 
     <!-- Toast Notification Banner -->
