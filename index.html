@@ -3169,7 +3169,7 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
         async function primeOfflineCache(){
             try{
                 if(!('caches' in window)) return;
-                const cache=await caches.open('hunter-language-system-inline-v1');
+                const cache=await caches.open('hunter-language-system-inline-v2');
                 const url=location.href.split('#')[0];
                 if(/^https?:/i.test(url)){
                     const res=await fetch(url,{cache:'no-store'});
@@ -3182,7 +3182,22 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
             // Nếu triển khai cùng file hunter-service-worker.js, đăng ký SW để có offline navigation thật.
             try{
                 const swUrl=new URL('./sw.js',location.href);
-                if(/^https?:$/i.test(swUrl.protocol)) await navigator.serviceWorker.register(swUrl.href,{scope:'./'});
+                if(/^https?:$/i.test(swUrl.protocol)){
+                    // Revisioned URL + updateViaCache:none prevents Safari/PWA from reusing
+                    // a stale Service Worker script from the HTTP cache.
+                    swUrl.searchParams.set('v','hunter-language-system-sw-v2');
+                    const registration=await navigator.serviceWorker.register(swUrl.href,{scope:'./',updateViaCache:'none'});
+                    try{ await registration.update(); }catch(_){}
+                    if(registration.waiting){
+                        try{ registration.waiting.postMessage({type:'SKIP_WAITING'}); }catch(_){}
+                    }
+                    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+                        if(!window.__hunterSwReloaded){
+                            window.__hunterSwReloaded=true;
+                            window.location.reload();
+                        }
+                    });
+                }
             }catch(e){ console.debug('Service Worker chưa khả dụng ở single-file/file://:',e); }
         }
 
@@ -3330,7 +3345,6 @@ function activatePotion(itemId) {
   import { getFirestore, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig={apiKey:"AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",authDomain:"hunter-lans.firebaseapp.com",projectId:"hunter-lans",storageBucket:"hunter-lans.firebasestorage.app",messagingSenderId:"167057896841",appId:"1:167057896841:web:a4da206f71141250505d58"};
-  import { enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"; // Bổ sung import này ở đầu file
 
 const app=initializeApp(firebaseConfig);
    const auth=getAuth(app);
@@ -3488,6 +3502,11 @@ const app=initializeApp(firebaseConfig);
   };
 
   window.firebaseSignOut=async function(){clearTimeout(pendingStateTimer); if(auth.currentUser&&loggedInUsername){try{const ref=usernameDoc(loggedInUsername),uid=auth.currentUser.uid;await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(snap.exists()&&snap.data().ownerUid===uid)tx.set(ref,{loggedIn:false,lastLogoutAt:serverTimestamp(),lastLogoutDeviceId:deviceId},{merge:true});});}catch(e){console.warn('Logout marker:',e);}} await signOut(auth);};
+
+  // Firebase bridge diagnostics: chỉ kiểm tra trạng thái khởi tạo, không tạo fallback giả.
+  if (typeof window.firebaseSignIn !== 'function') {
+    console.error('Firebase Auth bridge failed to initialize');
+  }
 
  onAuthStateChanged(auth, async user => {
     firebaseReady = true;
