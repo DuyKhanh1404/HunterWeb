@@ -177,6 +177,10 @@
             .analytics-lv-number { font-size:1.45rem; }
         }
 
+        /* --- STATUS STOPWATCH --- */
+        .status-stopwatch-display { letter-spacing:.08em; text-shadow:0 0 14px rgba(34,211,238,.28); }
+        .status-stopwatch-btn { min-height:40px; touch-action:manipulation; }
+
         /* --- RESPONSIVE MOBILE: vùng chạm tối thiểu 44px, chống tràn ngang và tối ưu safe-area. --- */
         html { min-height:100%; background:#05060b; }
         body { min-width:0; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
@@ -487,6 +491,21 @@
                                 <p class="text-[9px] text-slate-500 mt-1">Tính từ lần sử dụng đầu tiên và không reset</p>
                             </div>
                             <div id="account-usage-days" class="text-lg font-black font-mono text-cyan-300">1 ngày</div>
+                        </div>
+                        <div id="status-stopwatch" class="mt-4 p-4 rounded-2xl border border-purple-500/30 bg-slate-950/90 shadow-xl">
+                            <div class="flex items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <h3 class="text-xs font-black font-sans tracking-wider text-purple-200">⏱ ĐỒNG HỒ BẤM GIỜ</h3>
+                                    <p class="text-[9px] text-slate-500 mt-1">Bấm giờ độc lập, không ảnh hưởng tiến trình</p>
+                                </div>
+                                <div id="status-stopwatch-state" class="text-[9px] font-bold font-mono text-slate-500">ĐÃ DỪNG</div>
+                            </div>
+                            <div id="status-stopwatch-display" class="status-stopwatch-display text-center text-3xl md:text-4xl font-black font-mono text-cyan-300 py-2">00:00:00</div>
+                            <div class="grid grid-cols-3 gap-2 mt-3">
+                                <button id="status-stopwatch-start" type="button" onclick="startStatusStopwatch()" class="status-stopwatch-btn rounded-xl bg-emerald-600/90 hover:bg-emerald-500 border border-emerald-400/40 text-white text-[10px] font-black font-sans">BẮT ĐẦU</button>
+                                <button id="status-stopwatch-pause" type="button" onclick="pauseStatusStopwatch()" class="status-stopwatch-btn rounded-xl bg-amber-600/90 hover:bg-amber-500 border border-amber-400/40 text-white text-[10px] font-black font-sans">TẠM DỪNG</button>
+                                <button id="status-stopwatch-reset" type="button" onclick="resetStatusStopwatch()" class="status-stopwatch-btn rounded-xl bg-rose-600/90 hover:bg-rose-500 border border-rose-400/40 text-white text-[10px] font-black font-sans">ĐẶT LẠI</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1601,6 +1620,62 @@
             const elapsedDays = Math.max(1, Math.ceil(elapsedMs / 86400000));
             el.textContent = `${elapsedDays.toLocaleString('vi-VN')} ngày`;
         }
+
+        // --- STATUS STOPWATCH ---
+        let statusStopwatchElapsedMs = 0;
+        let statusStopwatchStartedAt = 0;
+        let statusStopwatchTimer = null;
+
+        function formatStatusStopwatch(ms) {
+            const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return [hours, minutes, seconds].map(v => String(v).padStart(2, '0')).join(':');
+        }
+
+        function renderStatusStopwatch() {
+            const display = document.getElementById('status-stopwatch-display');
+            const state = document.getElementById('status-stopwatch-state');
+            const startBtn = document.getElementById('status-stopwatch-start');
+            const pauseBtn = document.getElementById('status-stopwatch-pause');
+            if (!display) return;
+            const elapsed = statusStopwatchStartedAt
+                ? statusStopwatchElapsedMs + (Date.now() - statusStopwatchStartedAt)
+                : statusStopwatchElapsedMs;
+            display.textContent = formatStatusStopwatch(elapsed);
+            if (state) state.textContent = statusStopwatchStartedAt ? 'ĐANG CHẠY' : (statusStopwatchElapsedMs > 0 ? 'ĐÃ TẠM DỪNG' : 'ĐÃ DỪNG');
+            if (startBtn) startBtn.disabled = !!statusStopwatchStartedAt;
+            if (pauseBtn) pauseBtn.disabled = !statusStopwatchStartedAt;
+            if (startBtn) startBtn.classList.toggle('opacity-50', !!statusStopwatchStartedAt);
+            if (pauseBtn) pauseBtn.classList.toggle('opacity-50', !statusStopwatchStartedAt);
+        }
+
+        function startStatusStopwatch() {
+            if (statusStopwatchStartedAt) return;
+            statusStopwatchStartedAt = Date.now();
+            clearInterval(statusStopwatchTimer);
+            statusStopwatchTimer = setInterval(renderStatusStopwatch, 250);
+            renderStatusStopwatch();
+        }
+
+        function pauseStatusStopwatch() {
+            if (!statusStopwatchStartedAt) return;
+            statusStopwatchElapsedMs += Date.now() - statusStopwatchStartedAt;
+            statusStopwatchStartedAt = 0;
+            clearInterval(statusStopwatchTimer);
+            statusStopwatchTimer = null;
+            renderStatusStopwatch();
+        }
+
+        function resetStatusStopwatch() {
+            statusStopwatchElapsedMs = 0;
+            statusStopwatchStartedAt = 0;
+            clearInterval(statusStopwatchTimer);
+            statusStopwatchTimer = null;
+            renderStatusStopwatch();
+        }
+
 
         function checkActiveBuff() {
             if (gameState.activeBuff && Date.now() > gameState.activeBuff.expiresAt) {
