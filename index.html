@@ -224,32 +224,6 @@
         }
     </style>
 </head>
-<div id="usage-counter" style="font-size: 14px; opacity: 0.8; margin-top: 10px;">
-  Đã sử dụng: Đang tính toán...
-</div><script>
-  // Kiểm tra xem đã có mốc thời gian bắt đầu trong trình duyệt chưa
-  let startDate = localStorage.getItem('hunter_start_date');
-  
-  if (!startDate) {
-    // Nếu chưa có (lần đầu tiên mở web), lưu lại thời điểm hiện tại (tính bằng mili-giây)
-    startDate = new Date().getTime();
-    localStorage.setItem('hunter_start_date', startDate);
-  }
-
-  // Tính khoảng thời gian từ ngày bắt đầu đến hiện tại
-  const now = new Date().getTime();
-  const diffTime = now - parseInt(startDate);
-  
-  // Chuyển đổi từ mili-giây sang số ngày (1 ngày = 24 * 60 * 60 * 1000 ms)
-  // Cộng thêm 1 để ngày đầu tiên mở web sẽ tính là ngày 1
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-  // Hiển thị kết quả ra thẻ HTML ở trên
-  const counterElement = document.getElementById('usage-counter');
-  if (counterElement) {
-    counterElement.innerText = `Đã sử dụng: ${diffDays} ngày`;
-  }
-</script>
 <body class="min-h-screen bg-hunter-bg text-slate-100 flex flex-col selection:bg-purple-600 selection:text-white">
 
     <!-- Toast Notification Banner -->
@@ -505,6 +479,14 @@
                                 <div id="character-stats-multiplier" class="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 text-[10px] font-black font-mono text-amber-300">×1</div>
                             </div>
                             <div id="character-stats-grid" class="grid grid-cols-2 md:grid-cols-5 gap-2"></div>
+                        </div>
+
+                        <div class="mt-4 p-4 rounded-2xl border border-cyan-500/30 bg-slate-950/90 shadow-xl flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xs font-black font-sans tracking-wider text-cyan-200">⏳ THỜI GIAN SỬ DỤNG TÀI KHOẢN</h3>
+                                <p class="text-[9px] text-slate-500 mt-1">Tính từ lần sử dụng đầu tiên và không reset</p>
+                            </div>
+                            <div id="account-usage-days" class="text-lg font-black font-mono text-cyan-300">1 ngày</div>
                         </div>
                     </div>
                 </div>
@@ -1223,7 +1205,8 @@
             },
             archives: [],
             activityHistory: [],
-            settings: { soundEnabled: true }
+            settings: { soundEnabled: true },
+            accountFirstUseAt: Date.now()
         };
 
         function getWeekKey(d) {
@@ -1526,10 +1509,13 @@
         }
 
         function normalizeGameState() {
+            if (!gameState || typeof gameState !== 'object') gameState = cloneDefaultGameState();
+            if (!Number.isFinite(Number(gameState.accountFirstUseAt)) || Number(gameState.accountFirstUseAt) <= 0) {
+                gameState.accountFirstUseAt = Date.now();
+            }
             if (gameState.inventory) gameState.inventory.forEach(item => { item.imageUrl = migrateEmbeddedImageUrl(item.imageUrl); });
             if (gameState.activeBuff) gameState.activeBuff.imageUrl = migrateEmbeddedImageUrl(gameState.activeBuff.imageUrl);
             if (gameState.activeCoinBuff) gameState.activeCoinBuff.imageUrl = migrateEmbeddedImageUrl(gameState.activeCoinBuff.imageUrl);
-            if (!gameState || typeof gameState !== 'object') gameState = cloneDefaultGameState();
             if (!gameState.skills) gameState.skills = {};
             const defs = {
                 General: { name:'General (Tổng hợp)', icon:'compass' },
@@ -1601,6 +1587,19 @@
             saveDataForKey(getActiveStorageKey());
             if(!isLoggedIn)localStorage.setItem(STORAGE_KEY,JSON.stringify(gameState));
             renderAll();persistLocalFirst(reason).catch(e=>console.warn('Local-first save:',e));
+        }
+
+        function updateAccountUsageDays() {
+            const el = document.getElementById('account-usage-days');
+            if (!el) return;
+            const firstUseAt = Number(gameState.accountFirstUseAt);
+            if (!Number.isFinite(firstUseAt) || firstUseAt <= 0) {
+                el.textContent = '1 ngày';
+                return;
+            }
+            const elapsedMs = Math.max(0, Date.now() - firstUseAt);
+            const elapsedDays = Math.max(1, Math.ceil(elapsedMs / 86400000));
+            el.textContent = `${elapsedDays.toLocaleString('vi-VN')} ngày`;
         }
 
         function checkActiveBuff() {
@@ -2287,6 +2286,10 @@ function logActivity(text) {
         const username = loggedInUsername || (typeof ACCOUNT_USERNAME !== 'undefined' ? ACCOUNT_USERNAME : null);
         const activeKey = typeof getActiveStorageKey === 'function' ? getActiveStorageKey() : (username ? accountKey(username) : GUEST_STORAGE_KEY);
         const resetState = cloneDefaultGameState();
+        // Mốc sử dụng đầu tiên là dữ liệu bất biến, không bị ảnh hưởng bởi Reset tiến trình.
+        if (gameState && Number.isFinite(Number(gameState.accountFirstUseAt)) && Number(gameState.accountFirstUseAt) > 0) {
+            resetState.accountFirstUseAt = Number(gameState.accountFirstUseAt);
+        }
 
         // 1. Xóa dữ liệu cũ trong IndexedDB nếu có
         if (typeof idbDb !== 'undefined' && idbDb) {
@@ -2702,8 +2705,9 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
             if (dashSkillsEl) dashSkillsEl.innerHTML = '';
             if (detailedSkillsEl) detailedSkillsEl.innerHTML = '';
 
-            Object.keys(gameState.skills).forEach(key => {
+            ['General', 'Listening', 'Speaking', 'Reading', 'Writing'].forEach(key => {
                 const s = gameState.skills[key];
+                if (!s) return;
                 const sInfo = getSkillLevelInfo(s.xp);
                 const skillClass = `skill-${key.toLowerCase()}`;
                 
@@ -3247,7 +3251,8 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
             primeOfflineCache();
             registerPWAServiceWorker();
             renderAll();
-            setInterval(renderAll, 1000);
+            updateAccountUsageDays();
+            setInterval(()=>{ renderAll(); updateAccountUsageDays(); }, 1000);
         };
         // --- LOGIC BÌNH THUỐC Hunter Coin & MỐC NHIỆM VỤ ---
 
@@ -3476,6 +3481,7 @@ const app=initializeApp(firebaseConfig);
       const profile=await loadAccountState(canonical);
       if(profile.data?.username&&profile.data.ownerUid!==cred.user.uid)throw new Error('Tên tài khoản không khớp.');
       let state=profile.state; if(!state){state=cloneDefaultGameState();}
+      if(!Number.isFinite(Number(state.accountFirstUseAt)) || Number(state.accountFirstUseAt)<=0) state.accountFirstUseAt=Date.now();
       loggedInUsername=canonical; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',canonical); gameState=cloneState(state);normalizeGameState();checkCycleResets();
       const ensured=await ensureAccountDoc(canonical,gameState);
       if(ensured.state){gameState=cloneState(ensured.state);normalizeGameState();checkCycleResets();}
@@ -3490,7 +3496,9 @@ const app=initializeApp(firebaseConfig);
       const cred=await createUserWithEmailAndPassword(auth,usernameEmail(normalized),password);
       await updateProfile(cred.user,{displayName:normalized});
       loggedInUsername=normalized; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',normalized);
-      gameState=cloneDefaultGameState(); normalizeGameState();
+      gameState=cloneDefaultGameState();
+      gameState.accountFirstUseAt=Date.now();
+      normalizeGameState();
       await ensureAccountDoc(normalized,gameState);
       writeLocalAccountSnapshot(normalized,gameState,1); renderAll();updateAccountUI();updateSyncUI('synced');
     }catch(e){try{await signOut(auth);}catch(_){} isLoggedIn=false;loggedInUsername=null;throw friendlyAuthError(e);}
