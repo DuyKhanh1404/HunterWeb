@@ -265,6 +265,26 @@
             </div>
             <div id="auth-account-panel" class="hidden space-y-3">
                 <div class="rounded-xl bg-slate-950 border border-hunter-border px-4 py-3 text-sm text-cyan-100">Đang đăng nhập: <b id="account-panel-username" class="text-cyan-300"></b></div>
+
+                <!-- ACCOUNT AVATAR: chỉ xử lý ảnh đại diện của tài khoản -->
+                <div class="rounded-2xl bg-slate-950/80 border border-cyan-500/20 p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-16 h-16 shrink-0 rounded-2xl overflow-hidden border border-cyan-400/30 bg-slate-900 flex items-center justify-center shadow-inner">
+                            <img id="account-avatar-preview" src="" alt="Ảnh đại diện" class="hidden w-full h-full object-cover">
+                            <i id="account-avatar-fallback" data-lucide="user-round" class="w-7 h-7 text-cyan-300"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-black text-cyan-200">ẢNH ĐẠI DIỆN</div>
+                            <div class="text-[10px] text-slate-500 mt-1">Được lưu cùng tài khoản và tự đồng bộ trên thiết bị khác.</div>
+                            <div class="flex gap-2 mt-3">
+                                <button type="button" onclick="document.getElementById('account-avatar-input').click()" class="px-3 py-2 rounded-xl bg-cyan-950/70 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold">CHỌN ẢNH</button>
+                                <button type="button" onclick="removeAccountAvatar()" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 text-[10px] font-bold">XÓA</button>
+                            </div>
+                        </div>
+                    </div>
+                    <input id="account-avatar-input" type="file" accept="image/*" class="hidden" onchange="handleAccountAvatarFile(event)">
+                </div>
+
                 <button onclick="showChangePasswordPanel()" class="w-full py-3 rounded-xl bg-slate-900 border border-cyan-500/30 text-cyan-300 font-bold text-xs">ĐỔI MẬT KHẨU</button>
                 <button onclick="logoutUser(); closeLoginModal()" class="w-full py-3 rounded-xl bg-rose-950/60 border border-rose-500/30 text-rose-300 font-bold text-xs">ĐĂNG XUẤT</button>
             </div>
@@ -329,7 +349,9 @@
     <!-- Top Navigation Bar -->
     <header class="border-b border-hunter-border bg-hunter-card/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3 flex items-center justify-between shadow-lg shadow-black/40">
         <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('dashboard')">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.4)] border border-cyan-400/40">
+            <div class="w-10 h-10 rounded-xl overflow-hidden shadow-md flex items-center justify-center bg-slate-900 border border-slate-700">
+    <img src="icon.png" alt="HLS Logo" class="w-full h-full object-cover">
+</div>
                 <i data-lucide="crosshair" class="w-5 h-5 text-cyan-300 animate-pulse"></i>
             </div>
             <div>
@@ -1475,14 +1497,79 @@
         }
         function showLoginPanel(){ document.getElementById('auth-modal-title').textContent='ĐĂNG NHẬP HỆ THỐNG'; document.getElementById('auth-modal-subtitle').textContent='Đăng nhập để đồng bộ dữ liệu riêng của tài khoản trên mọi thiết bị.'; showAuthPanel('auth-login-panel'); setTimeout(()=>document.getElementById('login-username')?.focus(),50); }
         function showRegisterPanel(){ document.getElementById('auth-modal-title').textContent='TẠO TÀI KHOẢN'; document.getElementById('auth-modal-subtitle').textContent='Tên tài khoản phải là duy nhất. Dữ liệu sẽ được lưu riêng cho tài khoản đó.'; showAuthPanel('auth-register-panel'); setTimeout(()=>document.getElementById('register-username')?.focus(),50); }
-        function showAccountPanel(){ document.getElementById('auth-modal-title').textContent='TÀI KHOẢN'; document.getElementById('auth-modal-subtitle').textContent='Quản lý phiên đăng nhập và mật khẩu.'; document.getElementById('account-panel-username').textContent=loggedInUsername||''; showAuthPanel('auth-account-panel'); }
+        function showAccountPanel(){ document.getElementById('auth-modal-title').textContent='TÀI KHOẢN'; document.getElementById('auth-modal-subtitle').textContent='Quản lý phiên đăng nhập và mật khẩu.'; document.getElementById('account-panel-username').textContent=loggedInUsername||''; updateAccountAvatarUI(); showAuthPanel('auth-account-panel'); }
         function showChangePasswordPanel(){ document.getElementById('auth-modal-title').textContent='ĐỔI MẬT KHẨU'; document.getElementById('auth-modal-subtitle').textContent='Vì lý do bảo mật, Firebase có thể yêu cầu đăng nhập lại trước khi đổi mật khẩu.'; showAuthPanel('auth-password-panel'); }
         function openLoginModal(){ const modal=document.getElementById('login-modal'); if(!modal)return; modal.classList.remove('hidden'); modal.classList.add('flex'); isLoggedIn?showAccountPanel():showLoginPanel(); }
         function closeLoginModal(){ const modal=document.getElementById('login-modal'); if(!modal)return; modal.classList.remove('flex'); modal.classList.add('hidden'); }
-        function updateAccountUI(){
-            const btn=document.getElementById('login-open-btn'); if(!btn)return;
-            if(isLoggedIn){ btn.innerHTML=`👤 ${loggedInUsername} • TÀI KHOẢN`; btn.className='px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 transition text-emerald-300 text-[10px] font-bold font-sans shadow'; btn.onclick=openLoginModal; btn.title='Quản lý tài khoản'; }
-            else { btn.innerHTML='ĐĂNG NHẬP'; btn.className='px-3 py-2 rounded-xl bg-slate-950/90 hover:bg-slate-800 border border-cyan-500/30 transition text-cyan-300 text-[10px] font-bold font-sans shadow'; btn.onclick=openLoginModal; btn.title='Đăng nhập hoặc tạo tài khoản'; }
+        function updateAccountAvatarUI(){
+            const preview=document.getElementById('account-avatar-preview');
+            const fallback=document.getElementById('account-avatar-fallback');
+            const avatar=loggedInUsername ? (window.__hunterAccountAvatar || '') : '';
+            if(preview){
+                if(avatar){ preview.src=avatar; preview.classList.remove('hidden'); }
+                else { preview.removeAttribute('src'); preview.classList.add('hidden'); }
+            }
+            if(fallback) fallback.classList.toggle('hidden',!!avatar);
+
+            const btn=document.getElementById('login-open-btn');
+            if(!btn) return;
+            if(isLoggedIn){
+                const avatarHtml=avatar
+                    ? `<img src="${avatar}" alt="" class="w-7 h-7 rounded-lg object-cover border border-emerald-300/30 shrink-0">`
+                    : `<span class="w-7 h-7 rounded-lg bg-slate-900 border border-emerald-400/20 flex items-center justify-center shrink-0"><i data-lucide="user-round" class="w-4 h-4"></i></span>`;
+                btn.innerHTML=`${avatarHtml}<span class="leading-tight text-center">${loggedInUsername}<br><span class="text-[9px]">• TÀI KHOẢN</span></span>`;
+                btn.className='px-2.5 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 transition text-emerald-300 text-[10px] font-bold font-sans shadow flex items-center gap-1.5';
+                btn.onclick=openLoginModal; btn.title='Quản lý tài khoản';
+                if(window.lucide) window.lucide.createIcons();
+            } else {
+                btn.innerHTML='ĐĂNG NHẬP'; btn.className='px-3 py-2 rounded-xl bg-slate-950/90 hover:bg-slate-800 border border-cyan-500/30 transition text-cyan-300 text-[10px] font-bold font-sans shadow'; btn.onclick=openLoginModal; btn.title='Đăng nhập hoặc tạo tài khoản';
+            }
+        }
+        function updateAccountUI(){ updateAccountAvatarUI(); }
+
+        async function handleAccountAvatarFile(event){
+            const file=event?.target?.files?.[0];
+            if(!file || !loggedInUsername || typeof window.firebaseSaveAccountAvatar!=='function') return;
+            if(!file.type.startsWith('image/')){ showToast('⚠ Vui lòng chọn một tệp hình ảnh.', 'warning'); return; }
+            try{
+                showToast('⏳ Đang xử lý ảnh đại diện...', 'success');
+                const dataUrl=await compressAccountAvatar(file);
+                await window.firebaseSaveAccountAvatar(dataUrl);
+                showToast('✅ Đã cập nhật ảnh đại diện và đồng bộ tài khoản.', 'success');
+            }catch(err){
+                console.error('Account avatar:',err);
+                showToast('⚠ Không thể lưu ảnh đại diện. Vui lòng thử ảnh khác.', 'warning');
+            }finally{ if(event?.target) event.target.value=''; }
+        }
+
+        function compressAccountAvatar(file){
+            return new Promise((resolve,reject)=>{
+                const reader=new FileReader();
+                reader.onerror=()=>reject(new Error('Không đọc được ảnh.'));
+                reader.onload=()=>{
+                    const img=new Image();
+                    img.onerror=()=>reject(new Error('Ảnh không hợp lệ.'));
+                    img.onload=()=>{
+                        const maxSize=256, scale=Math.min(1,maxSize/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+                        const canvas=document.createElement('canvas');
+                        canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
+                        canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
+                        const ctx=canvas.getContext('2d',{alpha:false});
+                        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+                        let quality=.82, dataUrl=canvas.toDataURL('image/jpeg',quality);
+                        while(dataUrl.length>700000 && quality>.45){ quality-=.08; dataUrl=canvas.toDataURL('image/jpeg',quality); }
+                        if(dataUrl.length>900000) reject(new Error('Ảnh sau nén vẫn quá lớn.')); else resolve(dataUrl);
+                    };
+                    img.src=reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function removeAccountAvatar(){
+            if(!loggedInUsername || typeof window.firebaseSaveAccountAvatar!=='function') return;
+            try{ await window.firebaseSaveAccountAvatar(null); showToast('🗑 Đã xóa ảnh đại diện.', 'success'); }
+            catch(err){ console.error('Remove account avatar:',err); showToast('⚠ Không thể xóa ảnh đại diện lúc này.', 'warning'); }
         }
         function authErrorMessage(err){ const code=err?.code||''; const map={
             'auth/invalid-credential':'Sai tên tài khoản hoặc mật khẩu.','auth/invalid-login-credentials':'Sai tên tài khoản hoặc mật khẩu.','auth/user-not-found':'Không tìm thấy tài khoản.','auth/wrong-password':'Sai mật khẩu.','auth/email-already-in-use':'Tên tài khoản này đã được sử dụng.','auth/weak-password':'Mật khẩu quá yếu. Hãy dùng ít nhất 6 ký tự.','auth/too-many-requests':'Có quá nhiều lần thử. Hãy chờ một lúc rồi thử lại.','auth/requires-recent-login':'Vui lòng đăng nhập lại rồi đổi mật khẩu.','auth/network-request-failed':'Không kết nối được Firebase. Kiểm tra mạng.','auth/operation-not-allowed':'Firebase Authentication chưa bật Email/Password trong Console.'}; return map[code]||err?.message||'Đã xảy ra lỗi xác thực.'; }
@@ -3519,6 +3606,10 @@ const app=initializeApp(firebaseConfig);
   const usernameIndexDoc=u=>doc(db,'usernames',normalizeUsername(u));
   const cloneState=v=>JSON.parse(JSON.stringify(v));
   function accountKey(u){return ACCOUNT_STORAGE_PREFIX+normalizeUsername(u);}
+  function avatarKey(u){return accountKey(u)+'_avatar';}
+  function setLocalAccountAvatar(username,avatar){try{const key=avatarKey(username);if(avatar)localStorage.setItem(key,avatar);else localStorage.removeItem(key);}catch(e){console.warn('Local account avatar:',e);}}
+  function getLocalAccountAvatar(username){try{return localStorage.getItem(avatarKey(username))||'';}catch(e){return '';}}
+  function applyAccountAvatar(username,avatar){window.__hunterAccountAvatar=avatar||'';if(username)setLocalAccountAvatar(username,avatar);if(typeof updateAccountAvatarUI==='function')updateAccountAvatarUI();}
   function writeLocalAccountSnapshot(username,state,revision=0){try{const copy=cloneState(state);localStorage.setItem(accountKey(username),JSON.stringify(copy));if(typeof idbDb!=='undefined'&&idbDb)idbPut(IDB_STATE_STORE,{key:accountKey(username),state:copy,revision:Number(revision||0),updatedAt:Date.now()}).catch(()=>{});}catch(e){console.warn('Local account snapshot:',e);}}
   function friendlyAuthError(err){ const c=err?.code||''; if(c==='auth/email-already-in-use')return new Error('Tên tài khoản đã tồn tại.'); if(c==='auth/invalid-credential'||c==='auth/invalid-login-credentials')return new Error('Sai tên tài khoản hoặc mật khẩu.'); if(c==='auth/wrong-password')return new Error('Sai mật khẩu.'); if(c==='auth/user-not-found')return new Error('Không tìm thấy tài khoản.'); if(c==='auth/weak-password')return new Error('Mật khẩu phải có ít nhất 6 ký tự.'); if(c==='auth/requires-recent-login')return new Error('Vui lòng đăng nhập lại trước khi đổi mật khẩu.'); return err; }
   async function loadAccountState(username){
@@ -3598,6 +3689,7 @@ const app=initializeApp(firebaseConfig);
       if(!cred.user.displayName){try{await updateProfile(cred.user,{displayName:canonical});}catch(_){} }
       const profile=await loadAccountState(canonical);
       if(profile.data?.username&&profile.data.ownerUid!==cred.user.uid)throw new Error('Tên tài khoản không khớp.');
+      applyAccountAvatar(canonical,profile.data?.avatarDataUrl||getLocalAccountAvatar(canonical));
       let state=profile.state; if(!state){state=cloneDefaultGameState();}
       if(!Number.isFinite(Number(state.accountFirstUseAt)) || Number(state.accountFirstUseAt)<=0) state.accountFirstUseAt=Date.now();
       loggedInUsername=canonical; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',canonical); gameState=cloneState(state);normalizeGameState();checkCycleResets();
@@ -3614,12 +3706,27 @@ const app=initializeApp(firebaseConfig);
       const cred=await createUserWithEmailAndPassword(auth,usernameEmail(normalized),password);
       await updateProfile(cred.user,{displayName:normalized});
       loggedInUsername=normalized; isLoggedIn=true; localStorage.setItem('hunter_language_system_logged_in',normalized);
+      applyAccountAvatar(normalized,'');
       gameState=cloneDefaultGameState();
       gameState.accountFirstUseAt=Date.now();
       normalizeGameState();
       await ensureAccountDoc(normalized,gameState);
       writeLocalAccountSnapshot(normalized,gameState,1); renderAll();updateAccountUI();updateSyncUI('synced');
     }catch(e){try{await signOut(auth);}catch(_){} isLoggedIn=false;loggedInUsername=null;throw friendlyAuthError(e);}
+  };
+
+  window.firebaseSaveAccountAvatar=async function(dataUrl){
+    const user=auth.currentUser;
+    const username=loggedInUsername;
+    if(!user||!username) throw new Error('Chưa đăng nhập tài khoản.');
+    if(dataUrl && (!String(dataUrl).startsWith('data:image/') || String(dataUrl).length>900000)) throw new Error('Ảnh đại diện không hợp lệ hoặc quá lớn.');
+    applyAccountAvatar(username,dataUrl||'');
+    try{
+      await setDoc(usernameDoc(username),{avatarDataUrl:dataUrl||null,avatarUpdatedAt:serverTimestamp(),avatarUpdatedByDevice:deviceId},{merge:true});
+    }catch(e){
+      console.warn('Account avatar cloud sync:',e);
+      throw e;
+    }
   };
 
   window.firebaseChangePassword=async function(currentPassword,newPassword){
@@ -3684,6 +3791,7 @@ const app=initializeApp(firebaseConfig);
       // 🟢 GIỮ NGUYÊN PHIÊN ĐĂNG NHẬP KHI MẤT MẠNG
       loggedInUsername = normalizeUsername(rememberedUser);
       isLoggedIn = true;
+      applyAccountAvatar(loggedInUsername,getLocalAccountAvatar(loggedInUsername));
 
       // Load dữ liệu offline từ snapshot cục bộ đã lưu trước đó
       const localData = localStorage.getItem(accountKey(loggedInUsername));
@@ -3702,6 +3810,7 @@ const app=initializeApp(firebaseConfig);
       // Thực sự đăng xuất khi không tìm thấy tài khoản ghi nhớ
       isLoggedIn = false;
       loggedInUsername = null;
+      applyAccountAvatar('', '');
       updateAccountUI();
       updateSyncUI('ready');
       return;
@@ -3716,6 +3825,7 @@ const app=initializeApp(firebaseConfig);
       loggedInUsername = username;
       isLoggedIn = true;
       localStorage.setItem('hunter_language_system_logged_in', username);
+      applyAccountAvatar(username,getLocalAccountAvatar(username));
 
       const ref = usernameDoc(username);
       const snap = await getDoc(ref);
@@ -3725,6 +3835,7 @@ const app=initializeApp(firebaseConfig);
       } else {
         const remote = snap.data() || {};
         if(remote.ownerUid !== user.uid) throw new Error('Tài khoản không thuộc người dùng hiện tại.');
+        applyAccountAvatar(username,remote.avatarDataUrl||'');
         if(remote.state){
           gameState = cloneState(remote.state);
           normalizeGameState();
@@ -3743,6 +3854,9 @@ const app=initializeApp(firebaseConfig);
         if(remote.loggedIn === false && remote.lastLogoutDeviceId !== deviceId){
           signOut(auth).catch(() => {});
           return;
+        }
+        if(Object.prototype.hasOwnProperty.call(remote,'avatarDataUrl')){
+          applyAccountAvatar(username,remote.avatarDataUrl||'');
         }
         if(remote.state && Number(remote.revision || 0) > localRevisionForFirebase){
           applyingRemote = true;
