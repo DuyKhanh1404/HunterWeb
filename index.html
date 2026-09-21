@@ -1622,9 +1622,43 @@
         }
 
         // --- STATUS STOPWATCH ---
+        const STATUS_STOPWATCH_STORAGE_KEY = 'hunter_language_system_status_stopwatch_v1';
         let statusStopwatchElapsedMs = 0;
         let statusStopwatchStartedAt = 0;
         let statusStopwatchTimer = null;
+
+        function saveStatusStopwatchState() {
+            try {
+                const elapsed = statusStopwatchStartedAt
+                    ? statusStopwatchElapsedMs + (Date.now() - statusStopwatchStartedAt)
+                    : statusStopwatchElapsedMs;
+                localStorage.setItem(STATUS_STOPWATCH_STORAGE_KEY, JSON.stringify({
+                    elapsedMs: Math.max(0, elapsed),
+                    running: !!statusStopwatchStartedAt,
+                    savedAt: Date.now()
+                }));
+            } catch (e) {
+                console.warn('Status stopwatch local persistence:', e);
+            }
+        }
+
+        function loadStatusStopwatchState() {
+            try {
+                const raw = localStorage.getItem(STATUS_STOPWATCH_STORAGE_KEY);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                const elapsed = Number(saved?.elapsedMs);
+                if (!Number.isFinite(elapsed) || elapsed < 0) return;
+                statusStopwatchElapsedMs = elapsed;
+                if (saved?.running) {
+                    statusStopwatchStartedAt = Date.now();
+                    clearInterval(statusStopwatchTimer);
+                    statusStopwatchTimer = setInterval(renderStatusStopwatch, 250);
+                }
+            } catch (e) {
+                console.warn('Status stopwatch local restore:', e);
+            }
+        }
 
         function formatStatusStopwatch(ms) {
             const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
@@ -1656,6 +1690,7 @@
             statusStopwatchStartedAt = Date.now();
             clearInterval(statusStopwatchTimer);
             statusStopwatchTimer = setInterval(renderStatusStopwatch, 250);
+            saveStatusStopwatchState();
             renderStatusStopwatch();
         }
 
@@ -1665,6 +1700,7 @@
             statusStopwatchStartedAt = 0;
             clearInterval(statusStopwatchTimer);
             statusStopwatchTimer = null;
+            saveStatusStopwatchState();
             renderStatusStopwatch();
         }
 
@@ -1673,6 +1709,7 @@
             statusStopwatchStartedAt = 0;
             clearInterval(statusStopwatchTimer);
             statusStopwatchTimer = null;
+            saveStatusStopwatchState();
             renderStatusStopwatch();
         }
 
@@ -3327,6 +3364,12 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
             registerPWAServiceWorker();
             renderAll();
             updateAccountUsageDays();
+            loadStatusStopwatchState();
+            renderStatusStopwatch();
+            window.addEventListener('pagehide', saveStatusStopwatchState);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') saveStatusStopwatchState();
+            });
             setInterval(()=>{ renderAll(); updateAccountUsageDays(); }, 1000);
         };
         // --- LOGIC BÌNH THUỐC Hunter Coin & MỐC NHIỆM VỤ ---
@@ -3458,13 +3501,13 @@ function activatePotion(itemId) {
      - Dữ liệu chỉ được đọc/ghi khi request.auth.uid khớp ownerUid.
      ================================================================ */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, updatePassword, updateProfile, signOut, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getAuth, initializeAuth, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, updatePassword, updateProfile, signOut, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { getFirestore, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig={apiKey:"AIzaSyBBtslbCh7zagDWxbQMk71AD6_CoX0uIcs",authDomain:"hunter-lans.firebaseapp.com",projectId:"hunter-lans",storageBucket:"hunter-lans.firebasestorage.app",messagingSenderId:"167057896841",appId:"1:167057896841:web:a4da206f71141250505d58"};
 
 const app=initializeApp(firebaseConfig);
-   const auth=getAuth(app);
+   const auth=initializeAuth(app, { persistence: browserLocalPersistence });
    const db=getFirestore(app);
    enableIndexedDbPersistence(db).catch(err=>console.warn('Firestore offline persistence:', err.code || err));
   const DEVICE_ID_KEY='hunter_language_system_device_id_v2';
