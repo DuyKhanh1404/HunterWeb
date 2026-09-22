@@ -571,7 +571,7 @@
                                 <i data-lucide="clock" class="w-4 h-4 text-cyan-400"></i>
                                 <span>GHI NHẬN THỜI GIAN HỌC TẬP (NHẬN XP & COINS)</span>
                             </h2>
-                            <span class="text-xs text-slate-400 font-mono">1 phút = 15 XP + 5 Hunter Coin</span>
+                            <span class="text-xs text-slate-400 font-mono">1 phút = 15 XP + 5 Hunter Coin, HỌC LIÊN TỤC TRONG THỜI GIAN DÀI SẼ CÓ SỰ BẤT NGỜ! </span>
                         </div>
                         <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
                             <select id="study-skill-select" class="bg-slate-950 border border-hunter-border rounded-xl px-3 py-2.5 text-xs text-indigo-300 focus:outline-none focus:border-cyan-500 font-sans shadow-inner">
@@ -1983,8 +1983,26 @@
                 showToast("Vui lòng nhập số phút hợp lệ!", "error");
                 return;
             }
-            const baseXp = mins * BASE_XP_PER_MINUTE;
-            const coinsEarned = mins * BASE_COINS_PER_MINUTE * getCurrentCoinMultiplier();
+
+            let xpPerMinute;
+            let coinsPerMinute;
+
+            if (mins < 60) {
+                xpPerMinute = 15;
+                coinsPerMinute = 5;
+            } else if (mins < 120) {
+                xpPerMinute = 20;
+                coinsPerMinute = 10;
+            } else if (mins < 180) {
+                xpPerMinute = 25;
+                coinsPerMinute = 15;
+            } else {
+                xpPerMinute = 30;
+                coinsPerMinute = 20;
+            }
+
+            const baseXp = mins * xpPerMinute;
+            const coinsEarned = mins * coinsPerMinute * getCurrentCoinMultiplier();
             const mult = getCurrentMultiplier();
             const earnedXp = baseXp * mult;
 
