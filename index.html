@@ -1277,6 +1277,38 @@
                 ? `${now.getFullYear()}-${String(gameState.lastActiveMonth + 1).padStart(2, '0')}`
                 : gameState.lastActiveMonth;
 
+            // Chuyển khóa tuần cũ dạng YYYY-Wxx sang ngày Thứ Hai tương ứng.
+            // Điều này tránh việc dữ liệu cũ (ví dụ 2026-W40) bị hiểu là đã sang tuần mới
+            // vào Thứ Ba/Thứ Tư sau khi getWeekKey chuyển sang khóa YYYY-MM-DD.
+            const normalizeWeekKey = (key) => {
+                const match = String(key || '').match(/^(\d{4})-W(\d{1,2})$/);
+                if (!match) return key;
+                const year = Number(match[1]);
+                const week = Number(match[2]);
+                if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1 || week > 53) return key;
+
+                const jan4 = new Date(year, 0, 4);
+                const dayFromMonday = (jan4.getDay() + 6) % 7;
+                const monday = new Date(year, 0, 4 - dayFromMonday + (week - 1) * 7);
+                return getWeekKey(monday);
+            };
+
+            const lastWeekKey = normalizeWeekKey(gameState.lastActiveWeek);
+
+            const formatWeekDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            const getWeekArchiveLabel = (weekKey) => {
+                const weekStart = new Date(`${weekKey}T00:00:00`);
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                return `Tuần ngày ${formatWeekDate(weekStart)} - ${formatWeekDate(weekEnd)}`;
+            };
+
             if (gameState.lastActiveDate !== currentDateStr) {
                 gameState.archives.unshift({
                     type: 'Ngày (Daily)',
@@ -1294,10 +1326,10 @@
                 cycleChanged = true;
             }
 
-            if (gameState.lastActiveWeek !== currentWeekStr) {
+            if (lastWeekKey !== currentWeekStr) {
                 gameState.archives.unshift({
                     type: 'Tuần (Weekly)',
-                    label: `Tuần ${gameState.lastActiveWeek}`,
+                    label: getWeekArchiveLabel(lastWeekKey),
                     time: formatStudyTime(gameState.statistics.weekStudyTimeMinutes),
                     xp: gameState.statistics.weekXp,
                     coins: gameState.statistics.weekCoins
