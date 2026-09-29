@@ -1329,7 +1329,7 @@
             if (lastWeekKey !== currentWeekStr) {
                 gameState.archives.unshift({
                     type: 'Tuần (Weekly)',
-                    label: getWeekArchiveLabel(lastWeekKey),
+                    label: getWeekArchiveLabel(currentWeekStr),
                     time: formatStudyTime(gameState.statistics.weekStudyTimeMinutes),
                     xp: gameState.statistics.weekXp,
                     coins: gameState.statistics.weekCoins
