@@ -1219,7 +1219,7 @@
             lastStudyDate: new Date().toDateString(),
             lastActiveWeek: getWeekKey(new Date()),
             // ... các dòng bên dưới giữ nguyên ...
-            lastActiveMonth: new Date().getMonth(),
+            lastActiveMonth: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
             activeBuff: null,
             activeCoinBuff: null,
             skills: {
@@ -1250,19 +1250,32 @@
             accountFirstUseAt: Date.now()
         };
 
+        function getArchiveBadgeStyle(type) {
+            if (type === 'Ngày (Daily)') return 'background-color:rgba(34,197,94,.18);color:#86efac;border:1px solid rgba(34,197,94,.35);';
+            if (type === 'Tuần (Weekly)') return 'background-color:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(59,130,246,.35);';
+            if (type === 'Tháng (Monthly)') return 'background-color:rgba(168,85,247,.18);color:#d8b4fe;border:1px solid rgba(168,85,247,.35);';
+            return 'background-color:rgba(245,158,11,.12);color:#fcd34d;border:1px solid rgba(245,158,11,.25);';
+        }
+
         function getWeekKey(d) {
-            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-            let yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-            let weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-            return `${d.getUTCFullYear()}-W${weekNo}`;
+            const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const dayFromMonday = (date.getDay() + 6) % 7;
+            date.setDate(date.getDate() - dayFromMonday);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         function checkCycleResets() {
             let cycleChanged = false;
-            const currentDateStr = new Date().toDateString();
-            const currentWeekStr = getWeekKey(new Date());
-            const currentMonthNum = new Date().getMonth();
+            const now = new Date();
+            const currentDateStr = now.toDateString();
+            const currentWeekStr = getWeekKey(now);
+            const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const lastMonthKey = typeof gameState.lastActiveMonth === 'number'
+                ? `${now.getFullYear()}-${String(gameState.lastActiveMonth + 1).padStart(2, '0')}`
+                : gameState.lastActiveMonth;
 
             if (gameState.lastActiveDate !== currentDateStr) {
                 gameState.archives.unshift({
@@ -1298,7 +1311,7 @@
                 cycleChanged = true;
             }
 
-            if (gameState.lastActiveMonth !== currentMonthNum) {
+            if (lastMonthKey !== currentMonthKey) {
                 const skillXpArchive = Object.fromEntries(Object.entries(gameState.skills || {}).map(([key, skill]) => [key, {
                     name: skill.name,
                     xp: Number(skill.periodXp?.month || 0),
@@ -1306,7 +1319,7 @@
                 }]));
                 gameState.archives.unshift({
                     type: 'Tháng (Monthly)',
-                    label: `Tháng ${gameState.lastActiveMonth + 1}`,
+                    label: `Tháng ${lastMonthKey}`,
                     time: formatStudyTime(gameState.statistics.monthStudyTimeMinutes),
                     xp: gameState.statistics.monthXp,
                     coins: gameState.statistics.monthCoins,
@@ -1316,7 +1329,7 @@
                 gameState.statistics.monthXp = 0;
                 gameState.statistics.monthCoins = 0;
                 Object.values(gameState.skills || {}).forEach(skill => { if (skill.periodXp) skill.periodXp.month = 0; if (skill.periodMinutes) skill.periodMinutes.month = 0; });
-                gameState.lastActiveMonth = currentMonthNum;
+                gameState.lastActiveMonth = currentMonthKey;
                 gameState.monthlyQuest = getInitialQuests('monthly');
                 cycleChanged = true;
             }
@@ -1474,7 +1487,7 @@
             cloned.lastActiveDate = now.toDateString();
             cloned.lastStudyDate = now.toDateString();
             cloned.lastActiveWeek = getWeekKey(now);
-            cloned.lastActiveMonth = now.getMonth();
+            cloned.lastActiveMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             cloned.dailyQuests = [];
             cloned.weeklyQuests = [];
             cloned.monthlyQuest = null;
@@ -1670,7 +1683,7 @@
             if (gameState.permanentXpMultiplier === undefined) gameState.permanentXpMultiplier=1;
             if (gameState.lastActiveDate === undefined) gameState.lastActiveDate=new Date().toDateString();
             if (gameState.lastActiveWeek === undefined) gameState.lastActiveWeek=getWeekKey(new Date());
-            if (gameState.lastActiveMonth === undefined) gameState.lastActiveMonth=new Date().getMonth();
+            if (gameState.lastActiveMonth === undefined) gameState.lastActiveMonth=`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
         }
 
 
@@ -2881,7 +2894,7 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
                             <div class="bg-slate-950 border border-hunter-border p-3 rounded-xl text-xs font-mono shadow">
                                 <div class="flex flex-wrap items-center justify-between gap-2">
                                     <div class="flex items-center space-x-2">
-                                        <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">${arc.type}</span>
+                                        <span class="px-2 py-0.5 rounded font-bold" style="${getArchiveBadgeStyle(arc.type)}">${arc.type}</span>
                                         <span class="text-slate-200 font-bold">${arc.label}</span>
                                     </div>
                                     <div class="flex flex-wrap gap-3 text-slate-400">
@@ -3129,7 +3142,7 @@ const currentRankData = RANKS_CONFIG.find(r => r.id === info.id);
                 gameState.weeklyQuests.forEach(q => {
                     const qClass = `skill-${q.category.toLowerCase()}`;
                     const skillObj = gameState.skills[q.category] || gameState.skills.General;
-                    const progressMins = skillObj.totalMinutes - (q.baseMinutesAtCreation || 0);
+                    const progressMins = Number(skillObj.periodMinutes?.week || 0);
                     const isReady = progressMins >= q.requiredMinutes;
 
                     weeklyListEl.innerHTML += `
